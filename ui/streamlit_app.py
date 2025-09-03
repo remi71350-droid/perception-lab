@@ -108,8 +108,15 @@ def inject_base_styles() -> None:
         }
         .gif-card img { display: block; width: 100%; height: auto; }
         .gif-card .gif-cap { color: #cfeaf0; font-size: 12px; margin-top: 8px; }
-        .gif-card .gif-fn { color: #9fc7ce; font-size: 12px; margin-top: 6px; word-break: break-all; text-align: center; }
-        .gif-card .gif-desc { color: #8fbac0; font-size: 11px; margin-top: 4px; text-align: center; }
+        .gif-card .gif-title { color: #e6fbfe; font-size: 1.15rem; font-weight: 800; text-align: center; }
+        .gif-card .gif-sub { color: #cfeaf0; font-size: 1.0rem; font-weight: 700; text-align: center; }
+        .gif-card .gif-desc { color: #9fc7ce; font-size: 0.95rem; margin-top: 2px; text-align: center; }
+        .gif-card .gif-fn { color: #9fc7ce; font-size: 0.85rem; margin-top: 8px; word-break: break-all; text-align: center; }
+        .carousel-frame { border: 1px solid #ffffff; border-radius: 10px; padding: 12px 16px; margin-top: 8px; }
+        .carousel-row { display: flex; gap: 16px; justify-content: center; align-items: stretch; }
+        .gif-card.highlight { border: 2px solid #ffffff; box-shadow: 0 0 0 2px rgba(255,255,255,0.12) inset; }
+        .carousel-ctrl { display: flex; justify-content: center; align-items: center; gap: 14px; margin-top: 8px; }
+        .carousel-ctrl .stButton>button { font-weight: 700; padding: 8px 16px; }
 
         /* Carousel arrows - larger, adjacent to card */
         .arrow-col button {
@@ -280,41 +287,54 @@ def main() -> None:
         st.session_state.setdefault("scenario_idx", 0)
         st.session_state.setdefault("video_choice", scenarios[0]["mp4"])
 
-        pad_l, nav_l, card_col, nav_r, pad_r = st.columns([3, 1, 6, 1, 3])
-        with nav_l:
-            st.markdown('<div class="arrow-col">', unsafe_allow_html=True)
-            if st.button("◀", key="carousel_prev"):
-                st.session_state["scenario_idx"] = (st.session_state["scenario_idx"] - 1) % len(scenarios)
-            st.markdown('</div>', unsafe_allow_html=True)
-        with nav_r:
-            st.markdown('<div class="arrow-col">', unsafe_allow_html=True)
-            if st.button("▶", key="carousel_next"):
-                st.session_state["scenario_idx"] = (st.session_state["scenario_idx"] + 1) % len(scenarios)
-            st.markdown('</div>', unsafe_allow_html=True)
+        # Show three cards (Prev | Center | Next)
+        n = len(scenarios)
+        mid = int(st.session_state["scenario_idx"]) % n
+        left_i = (mid - 1) % n
+        right_i = (mid + 1) % n
 
-        with card_col:
-            idx = int(st.session_state["scenario_idx"]) % len(scenarios)
+        col_left, col_center, col_right = st.columns([1, 1, 1], gap="small")
+
+        def render_card(col, idx, show_prev=False, show_next=False, show_select=False, highlight=False):
             item = scenarios[idx]
             gif_path = assets_dir / item["gif"]
-            if gif_path.exists():
-                import base64 as _b64
-                b64 = _b64.b64encode(gif_path.read_bytes()).decode("utf-8")
+            if not gif_path.exists():
+                return
+            import base64 as _b64
+            b64 = _b64.b64encode(gif_path.read_bytes()).decode("utf-8")
+            desc = item['desc']
+            title, rest = desc.split(' — ', 1) if ' — ' in desc else (desc, '')
+            sub, detail = rest.split(':', 1) if ':' in rest else (rest, '')
+            with col:
                 st.markdown(
                     f"""
-                    <div class=\"gif-grid\">\
-                      <div class=\"gif-card\">\
-                        <div class=\"gif-desc\">{item['desc']}</div>
-                        <img src=\"data:image/gif;base64,{b64}\" />
-                        <div class=\"gif-fn\">{item['name']}</div>
-                      </div>
-                    </div>
+                    <div class=\"{'gif-card highlight' if highlight else 'gif-card'}\">\
+                      <div class=\"gif-title\">{title.strip()}</div>
+                      <div class=\"gif-sub\">{sub.strip()}</div>
+                      <div class=\"gif-desc\">{detail.strip()}</div>
+                      <img src=\"data:image/gif;base64,{b64}\" />
+                      <div class=\"gif-fn\">{item['name']}</div>
                     """,
                     unsafe_allow_html=True,
                 )
-            # Select Clip button inside the card
-            if st.button("Select Clip", key=f"select_clip_{idx}"):
-                st.session_state["video_choice"] = item["mp4"]
-                st.toast(f"Selected {item['mp4']}", icon="✅")
+                if show_prev and st.button("Prev.", key=f"prev_{idx}"):
+                    st.session_state["scenario_idx"] = (mid - 1) % n
+                    st.rerun()
+                if show_select and st.button("Select", key=f"select_{idx}"):
+                    st.session_state["video_choice"] = item["mp4"]
+                    st.toast(f"Selected {item['mp4']}", icon="✅")
+                if show_next and st.button("Next", key=f"next_{idx}"):
+                    st.session_state["scenario_idx"] = (mid + 1) % n
+                    st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
+
+        # Outer frame
+        st.markdown('<div class="carousel-frame">', unsafe_allow_html=True)
+        row_l, row_c, row_r = st.columns([1,1,1], gap="small")
+        render_card(row_l, left_i, show_prev=True)
+        render_card(row_c, mid, show_select=True, highlight=True)
+        render_card(row_r, right_i, show_next=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
         with st.expander("Overlays & thresholds", expanded=True):
             ol1, ol2, ol3, ol4 = st.columns([1, 1, 1, 2])
