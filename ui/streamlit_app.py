@@ -637,6 +637,60 @@ def main() -> None:
                         st.session_state["show_ab"] = False
                         st.toast("Cleared.", icon="🧹")
 
+                # P1: quick metrics & report
+                b1, b2 = st.columns([1.2,1.6])
+                with b1:
+                    if st.button("Score last run", use_container_width=True, disabled=not st.session_state.get("has_run")):
+                        try:
+                            import json as _json
+                            from pathlib import Path as _P
+                            evp = _P("runs/latest/events.jsonl")
+                            frames = 0; fps_acc=0.0; pre=0.0; model=0.0; post=0.0
+                            if evp.exists():
+                                with evp.open("r", encoding="utf-8") as fh:
+                                    for line in fh:
+                                        try:
+                                            ev = _json.loads(line)
+                                            frames += 1
+                                            fps_acc += float(ev.get("fps") or 0)
+                                            pre += float(ev.get("pre_ms") or 0)
+                                            model += float(ev.get("model_ms") or 0)
+                                            post += float(ev.get("post_ms") or 0)
+                                        except Exception:
+                                            continue
+                            metrics = {
+                                "frames": frames,
+                                "avg_fps": round((fps_acc/frames) if frames else 0, 2),
+                                "avg_pre_ms": round((pre/frames) if frames else 0, 2),
+                                "avg_model_ms": round((model/frames) if frames else 0, 2),
+                                "avg_post_ms": round((post/frames) if frames else 0, 2),
+                            }
+                            _P("runs/latest").mkdir(parents=True, exist_ok=True)
+                            with _P("runs/latest/metrics.json").open("w", encoding="utf-8") as fh:
+                                _json.dump(metrics, fh, indent=2)
+                            st.success("Metrics saved to runs/latest/metrics.json")
+                        except Exception as e:
+                            st.warning(f"Scoring failed: {e}")
+                with b2:
+                    if st.button("Generate report (PDF)", use_container_width=True, disabled=not st.session_state.get("has_run")):
+                        try:
+                            from PIL import Image as PILImage, ImageDraw
+                            out_pdf = Path("runs/latest/report.pdf")
+                            lf = Path("runs/latest/last_frame.png")
+                            if lf.exists():
+                                im = PILImage.open(lf).convert("RGB").resize((1280,720))
+                                page = PILImage.new("RGB", (1280, 900), (6,15,37))
+                                d = ImageDraw.Draw(page)
+                                d.text((40,30), "PerceptionLab — Run summary", fill=(200,245,255))
+                                page.paste(im, (0,160))
+                                out_pdf.parent.mkdir(parents=True, exist_ok=True)
+                                page.save(out_pdf, "PDF", resolution=144)
+                                st.success(f"Report saved: {out_pdf}")
+                            else:
+                                st.info("No last_frame.png to include in report.")
+                        except Exception as e:
+                            st.warning(f"Report generation failed: {e}")
+
                 # Overlays & thresholds
                 st.markdown("### Overlays & thresholds")
                 ov1, ov2, ov3, ov4 = st.columns([1,1,1,1])
