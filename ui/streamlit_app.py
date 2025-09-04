@@ -551,9 +551,20 @@ def main() -> None:
                         else:
                             st.warning("MP4 missing.")
                 with btnc2:
-                    if st.button("Copy path", use_container_width=True):
-                        mp4 = (sel or {}).get("mp4")
-                        st.info(mp4 or "")
+                    # Copy path via Clipboard API
+                    mp4 = (sel or {}).get("mp4") or ""
+                    st.markdown(
+                        f"""
+                        <button id='copy-path-btn' style='width:100%;padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.06);color:#cfeaf0;'>Copy path</button>
+                        <script>
+                        (function(){
+                          const b=document.getElementById('copy-path-btn');
+                          if(b){b.onclick=async()=>{try{await navigator.clipboard.writeText('{mp4}');}catch(e){console.log(e);}}}
+                        })();
+                        </script>
+                        """,
+                        unsafe_allow_html=True,
+                    )
                 st.markdown("</div>", unsafe_allow_html=True)
 
             with left:
@@ -587,6 +598,7 @@ def main() -> None:
                     if st.button("Run 10s", type="primary", use_container_width=True, disabled=disabled_common):
                         if mp4_ok:
                             st.session_state["_run10s_running"] = True
+                            st.session_state["has_run"] = True
                             st.toast("Processing 10 seconds…", icon="▶️")
                             try:
                                 requests.post(f"{st.session_state.api_base}/run_video", json={"video_path": mp4, "profile": profile, "duration_s": 10, "emit_video": False}, timeout=120)
@@ -601,6 +613,7 @@ def main() -> None:
                         try:
                             requests.post(f"{st.session_state.api_base}/ab_compare", json={"video_path": mp4}, timeout=60)
                             st.session_state["show_ab"] = True
+                            st.session_state["has_run"] = True
                             st.toast("Compare images ready.", icon="🌓")
                         except Exception as e:
                             st.warning(f"Compare failed: {e}")
@@ -673,41 +686,41 @@ def main() -> None:
                     st.caption("Click 'Compare this frame' to populate.")
 
                 # Telemetry compact table
-                st.markdown("### Telemetry")
-                # Fetch/refresh last event (simple polling) and append to rows
-                rows = st.session_state.get("telemetry_rows", [])
-                if _ok:
-                    try:
-                        last = requests.get(f"{st.session_state.api_base}/last_event", timeout=6).json()
-                        evt = last.get("event") or {}
-                        if evt:
-                            rec = {
-                                "frame_id": evt.get("frame_id"),
-                                "fps": evt.get("fps"),
-                                "pre_ms": (evt.get("latency_ms") or {}).get("pre"),
-                                "model_ms": (evt.get("latency_ms") or {}).get("model"),
-                                "post_ms": (evt.get("latency_ms") or {}).get("post"),
-                                "provider": (evt.get("provider_provenance") or {}).get("detector"),
-                                "level": (evt.get("level") or "info"),
-                            }
-                            rows.append(rec)
-                            rows = rows[-100:]
-                            st.session_state["telemetry_rows"] = rows
-                            # update HUD snapshot
-                            st.session_state["hud_vals"] = {"fps": rec.get("fps"), "pre": rec.get("pre_ms"), "model": rec.get("model_ms"), "post": rec.get("post_ms")}
-                    except Exception:
-                        pass
-                errors_only = st.checkbox("Errors only", key="telemetry_errors_only")
-                view_rows = rows
-                if errors_only:
-                    view_rows = [r for r in rows if r.get("level") in ["warn","error","timeout"]]
-                if view_rows:
-                    import pandas as pd
-                    df = pd.DataFrame(view_rows)[["frame_id","fps","pre_ms","model_ms","post_ms","provider","level"]]
-                    st.dataframe(df.tail(100), use_container_width=True, height=240)
-                else:
-                    st.caption("WebSocket stream (stub) will print events below.")
-                    st.info("No telemetry yet.")
+                if st.session_state.get("has_run"):
+                    st.markdown("### Telemetry")
+                    # Fetch/refresh last event (simple polling) and append to rows
+                    rows = st.session_state.get("telemetry_rows", [])
+                    if _ok:
+                        try:
+                            last = requests.get(f"{st.session_state.api_base}/last_event", timeout=6).json()
+                            evt = last.get("event") or {}
+                            if evt:
+                                rec = {
+                                    "frame_id": evt.get("frame_id"),
+                                    "fps": evt.get("fps"),
+                                    "pre_ms": (evt.get("latency_ms") or {}).get("pre"),
+                                    "model_ms": (evt.get("latency_ms") or {}).get("model"),
+                                    "post_ms": (evt.get("latency_ms") or {}).get("post"),
+                                    "provider": (evt.get("provider_provenance") or {}).get("detector"),
+                                    "level": (evt.get("level") or "info"),
+                                }
+                                rows.append(rec)
+                                rows = rows[-100:]
+                                st.session_state["telemetry_rows"] = rows
+                                # update HUD snapshot
+                                st.session_state["hud_vals"] = {"fps": rec.get("fps"), "pre": rec.get("pre_ms"), "model": rec.get("model_ms"), "post": rec.get("post_ms")}
+                        except Exception:
+                            pass
+                    errors_only = st.checkbox("Errors only", key="telemetry_errors_only")
+                    view_rows = rows
+                    if errors_only:
+                        view_rows = [r for r in rows if r.get("level") in ["warn","error","timeout"]]
+                    if view_rows:
+                        import pandas as pd
+                        df = pd.DataFrame(view_rows)[["frame_id","fps","pre_ms","model_ms","post_ms","provider","level"]]
+                        st.dataframe(df.tail(100), use_container_width=True, height=240)
+                    else:
+                        st.caption("No telemetry yet.")
 
                 # Artifacts panel
                 st.markdown("### Artifacts")
@@ -726,6 +739,22 @@ def main() -> None:
                     if report_pdf.exists():
                         st.markdown(f"[Open report]({report_pdf.as_posix()})")
                 st.caption("Artifacts reflect the current mode and overlay settings at capture time.")
+
+                # Keyboard shortcuts: space (Run 10s), b (Compare), esc (Back)
+                st.markdown(
+                    """
+                    <script>
+                    document.addEventListener('keydown', function(e){
+                      const buttons = [...document.querySelectorAll('button')];
+                      function clickByText(t){ const el = buttons.find(b => (b.innerText||'').trim()===t); if(el){ e.preventDefault(); el.click(); }}
+                      if(e.code==='Space'){ clickByText('Run 10s'); }
+                      if(e.key==='b' || e.key==='B'){ clickByText('Compare this frame'); }
+                      if(e.key==='Escape'){ const el = buttons.find(b => (b.innerText||'').includes('Back to gallery')); if(el){ e.preventDefault(); el.click(); }}
+                    });
+                    </script>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
                 # Note: Single-image tools have been removed from the focus view per requirements.
 
