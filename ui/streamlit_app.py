@@ -9,6 +9,8 @@ import requests
 import threading
 import json as _json
 from urllib.parse import urlencode
+from app.services.client import HttpClient
+from app.services.offline_client import OfflineClient
 
 
 def get_logo_path() -> Path:
@@ -272,7 +274,7 @@ def main() -> None:
 
     def _ping_api(base: str) -> bool:
         try:
-            r = requests.get(f"{base}/health", timeout=2)
+            r = requests.get(f"{base}/health", timeout=0.2)
             return r.ok
         except Exception:
             return False
@@ -285,8 +287,15 @@ def main() -> None:
 
     render_top_banner(logo_path)
 
-    # Connection badge row (small)
+    # Offline mode detection
+    offline_env = os.getenv("PERCEPTION_OFFLINE", "").strip()
+    offline = offline_env not in ("", "0", "false", "False")
     _ok = _ping_api(st.session_state.api_base)
+    if offline or not _ok:
+        st.session_state.offline = True
+        _ok = True  # treat as connected for UX
+    else:
+        st.session_state.offline = False
     _badge = "🟢 Connected" if _ok else "🔴 Offline"
     st.markdown(
         f"""
@@ -344,6 +353,9 @@ def main() -> None:
     tab_run, tab_eval, tab_metrics, tab_reports, tab_fusion, tab_use_cases = st.tabs(
         ["Scenarios", "Evaluate", "Metrics", "Reports", "Fusion", "Use Cases"]
     )
+
+    # Initialize client
+    client = OfflineClient() if st.session_state.get("offline") else HttpClient(st.session_state.api_base)
 
     with tab_run:
         # Scenarios: Gallery → Focus flow
@@ -580,7 +592,20 @@ def main() -> None:
                             st.session_state["has_run"] = True
                             st.toast("Processing 10 seconds…", icon="▶️")
                             try:
-                                requests.post(f"{st.session_state.api_base}/run_video", json={"video_path": mp4, "profile": profile, "duration_s": 10, "emit_video": False}, timeout=120)
+                                # Build overlays and thresholds payload from UI state
+                                overlays = {
+                                    "boxes": st.session_state.get("ov_boxes_focus", True),
+                                    "tracks": st.session_state.get("ov_tracks_focus", True),
+                                    "ocr": st.session_state.get("ov_ocr_focus", True),
+                                    "hud": st.session_state.get("ov_hud_focus", False),
+                                }
+                                thresholds = {
+                                    "confidence": st.session_state.get("conf_thresh_focus", 0.35),
+                                    "nms_iou": st.session_state.get("nms_iou_focus", 0.5),
+                                    "mask_opacity": st.session_state.get("mask_opacity_focus", 0.35),
+                                    "include": st.session_state.get("class_filter_focus", ""),
+                                }
+                                client.run_video(mp4, profile, duration_s=10, emit_video=False, overlays=overlays, thresholds=thresholds)
                                 st.toast("Finished.", icon="✅")
                             except Exception as e:
                                 st.warning(f"Run failed: {e}")
@@ -590,7 +615,7 @@ def main() -> None:
                 with a2:
                     if st.button("Compare this frame", use_container_width=True, disabled=disabled_common):
                         try:
-                            requests.post(f"{st.session_state.api_base}/ab_compare", json={"video_path": mp4}, timeout=60)
+                            client.ab_compare(mp4)
                             st.session_state["show_ab"] = True
                             st.session_state["has_run"] = True
                             st.toast("Compare images ready.", icon="🌓")
@@ -599,18 +624,72 @@ def main() -> None:
                 with a3:
                     if st.button("Stop run", use_container_width=True, disabled=running or (not _ok)):
                         try:
-                            requests.post(f"{st.session_state.api_base}/run_control", json={"action":"stop"}, timeout=10)
+                            client.run_control("stop")
                             st.toast("Stopped.", icon="⏹️")
                         except Exception as e:
                             st.warning(f"Stop failed: {e}")
                 with a4:
                     if st.button("Clear results", use_container_width=True, disabled=not _ok):
                         try:
-                            requests.post(f"{st.session_state.api_base}/clear", timeout=10)
+                            client.clear()
                         except Exception:
                             pass
                         st.session_state["show_ab"] = False
                         st.toast("Cleared.", icon="🧹")
+
+                # P1: quick metrics & report
+                b1, b2 = st.columns([1.2,1.6])
+                with b1:
+                    if st.button("Score last run", use_container_width=True, disabled=not st.session_state.get("has_run")):
+                        try:
+                            import json as _json
+                            from pathlib import Path as _P
+                            evp = _P("runs/latest/events.jsonl")
+                            frames = 0; fps_acc=0.0; pre=0.0; model=0.0; post=0.0
+                            if evp.exists():
+                                with evp.open("r", encoding="utf-8") as fh:
+                                    for line in fh:
+                                        try:
+                                            ev = _json.loads(line)
+                                            frames += 1
+                                            fps_acc += float(ev.get("fps") or 0)
+                                            pre += float(ev.get("pre_ms") or 0)
+                                            model += float(ev.get("model_ms") or 0)
+                                            post += float(ev.get("post_ms") or 0)
+                                        except Exception:
+                                            continue
+                            metrics = {
+                                "frames": frames,
+                                "avg_fps": round((fps_acc/frames) if frames else 0, 2),
+                                "avg_pre_ms": round((pre/frames) if frames else 0, 2),
+                                "avg_model_ms": round((model/frames) if frames else 0, 2),
+                                "avg_post_ms": round((post/frames) if frames else 0, 2),
+                            }
+                            _P("runs/latest").mkdir(parents=True, exist_ok=True)
+                            with _P("runs/latest/metrics.json").open("w", encoding="utf-8") as fh:
+                                _json.dump(metrics, fh, indent=2)
+                            st.success("Metrics saved to runs/latest/metrics.json")
+                        except Exception as e:
+                            st.warning(f"Scoring failed: {e}")
+                with b2:
+                    if st.button("Generate report (PDF)", use_container_width=True, disabled=not st.session_state.get("has_run")):
+                        try:
+                            from PIL import Image as PILImage, ImageDraw
+                            out_pdf = Path("runs/latest/report.pdf")
+                            lf = Path("runs/latest/last_frame.png")
+                            if lf.exists():
+                                im = PILImage.open(lf).convert("RGB").resize((1280,720))
+                                page = PILImage.new("RGB", (1280, 900), (6,15,37))
+                                d = ImageDraw.Draw(page)
+                                d.text((40,30), "PerceptionLab — Run summary", fill=(200,245,255))
+                                page.paste(im, (0,160))
+                                out_pdf.parent.mkdir(parents=True, exist_ok=True)
+                                page.save(out_pdf, "PDF", resolution=144)
+                                st.success(f"Report saved: {out_pdf}")
+                            else:
+                                st.info("No last_frame.png to include in report.")
+                        except Exception as e:
+                            st.warning(f"Report generation failed: {e}")
 
                 # Overlays & thresholds
                 st.markdown("### Overlays & thresholds")
@@ -667,29 +746,34 @@ def main() -> None:
                 # Telemetry compact table
                 if st.session_state.get("has_run"):
                     st.markdown("### Telemetry")
-                    # Fetch/refresh last event (simple polling) and append to rows
-                    rows = st.session_state.get("telemetry_rows", [])
-                    if _ok:
-                        try:
-                            last = requests.get(f"{st.session_state.api_base}/last_event", timeout=6).json()
-                            evt = last.get("event") or {}
-                            if evt:
-                                rec = {
-                                    "frame_id": evt.get("frame_id"),
-                                    "fps": evt.get("fps"),
-                                    "pre_ms": (evt.get("latency_ms") or {}).get("pre"),
-                                    "model_ms": (evt.get("latency_ms") or {}).get("model"),
-                                    "post_ms": (evt.get("latency_ms") or {}).get("post"),
-                                    "provider": (evt.get("provider_provenance") or {}).get("detector"),
-                                    "level": (evt.get("level") or "info"),
-                                }
-                                rows.append(rec)
-                                rows = rows[-100:]
-                                st.session_state["telemetry_rows"] = rows
-                                # update HUD snapshot
-                                st.session_state["hud_vals"] = {"fps": rec.get("fps"), "pre": rec.get("pre_ms"), "model": rec.get("model_ms"), "post": rec.get("post_ms")}
-                        except Exception:
-                            pass
+                    # Prefer reading events.jsonl if present
+                    rows = []
+                    try:
+                        from pathlib import Path as _P
+                        ev_path = _P("runs/latest/events.jsonl")
+                        if ev_path.exists():
+                            import json as _json
+                            with ev_path.open("r", encoding="utf-8") as fh:
+                                for line in fh.readlines()[-200:]:
+                                    try:
+                                        ev = _json.loads(line.strip())
+                                        rows.append({
+                                            "frame_id": ev.get("frame_id"),
+                                            "fps": ev.get("fps"),
+                                            "pre_ms": (ev.get("latency_ms") or {}).get("pre"),
+                                            "model_ms": (ev.get("latency_ms") or {}).get("model"),
+                                            "post_ms": (ev.get("latency_ms") or {}).get("post"),
+                                            "provider": (ev.get("provider_provenance") or {}).get("detector"),
+                                            "level": ev.get("level", "info"),
+                                        })
+                                    except Exception:
+                                        continue
+                            # update HUD snapshot from last row
+                            if rows:
+                                last = rows[-1]
+                                st.session_state["hud_vals"] = {"fps": last.get("fps"), "pre": last.get("pre_ms"), "model": last.get("model_ms"), "post": last.get("post_ms")}
+                    except Exception:
+                        rows = st.session_state.get("telemetry_rows", [])
                     errors_only = st.checkbox("Errors only", key="telemetry_errors_only")
                     view_rows = rows
                     if errors_only:
@@ -710,13 +794,19 @@ def main() -> None:
                 with ac1:
                     if last_frame.exists():
                         st.image(str(last_frame), caption="last_frame.png", use_column_width=True)
-                        if st.button("Copy path (last_frame.png)"):
-                            st.info(str(last_frame))
+                        cpl, cpr = st.columns([1,3])
+                        with cpl:
+                            if st.button("Copy path (image)"):
+                                st.info(str(last_frame))
                 with ac2:
                     if out_mp4.exists():
                         st.video(str(out_mp4))
+                        if st.button("Copy path (video)"):
+                            st.info(str(out_mp4))
                     if report_pdf.exists():
-                        st.markdown(f"[Open report]({report_pdf.as_posix()})")
+                        st.link_button("Open report (PDF)", report_pdf.as_posix(), use_container_width=True)
+                        if st.button("Copy path (report)"):
+                            st.info(str(report_pdf))
                 st.caption("Artifacts reflect the current mode and overlay settings at capture time.")
 
                 # Keyboard shortcuts: space (Run 10s), b (Compare), esc (Back)
