@@ -28,6 +28,9 @@ Thumbs.db
 # Runs & artifacts
 runs/
 *.zip
+data/samples/*.mp4
+assets/*.gif
+.gitattributes
 
 # Node (if we add a web client later)
 node_modules/
