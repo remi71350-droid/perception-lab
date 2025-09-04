@@ -26,7 +26,7 @@ def inject_base_styles() -> None:
     st.markdown(
         """
         <style>
-        :root { --cardw: 310px; }
+        :root { --cardw: 310px; --aqua:#02ABC1; }
         /* App background */
         .stApp { background-color: #060F25; }
         /* Global font family */
@@ -55,7 +55,8 @@ def inject_base_styles() -> None:
         }
         .top-banner img { max-height: 173px; display: block; margin: 0; }
         .stButton>button { transition: all 200ms ease-in-out; border-radius: 8px; }
-        .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); padding: 12px 14px; border-radius: 10px; }
+        .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 12px 14px; border-radius: 12px; box-shadow: 0 6px 18px rgba(0,0,0,0.18); }
+        .sticky-right { position: sticky; top: 10px; }
         .sticky-hud { position: sticky; top: 6px; z-index: 100; background: rgba(6,15,37,0.85); backdrop-filter: blur(4px); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(2,171,193,0.2); }
 
         /* Centering helpers */
@@ -80,11 +81,11 @@ def inject_base_styles() -> None:
             font-weight: 900 !important;
             font-size: 2rem !important; /* tuned down */
             letter-spacing: 0.015em;
-            color: #02ABC1; /* default: blue-green */
+            color: var(--aqua); /* default: blue-green */
             padding: 18px 24px;
             border-radius: 14px 14px 0 0;
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.10);
             box-shadow: 0 2px 4px rgba(0,0,0,0.15) inset;
             transition: all 160ms ease-in-out;
             flex: 1 1 0;
@@ -99,9 +100,9 @@ def inject_base_styles() -> None:
         }
         .stTabs [aria-selected="true"] {
             color: #ffffff !important; /* selected: white */
-            background: linear-gradient(180deg, rgba(2,171,193,0.22), rgba(2,171,193,0.06));
-            border-color: rgba(2,171,193,0.55);
-            box-shadow: 0 0 0 1px rgba(2,171,193,0.35), 0 8px 18px rgba(2,171,193,0.16);
+            background: linear-gradient(180deg, rgba(2,171,193,0.20), rgba(2,171,193,0.05));
+            border-color: rgba(2,171,193,0.45);
+            box-shadow: 0 0 0 1px rgba(2,171,193,0.28), 0 8px 18px rgba(2,171,193,0.14);
             font-weight: 900 !important;
             text-shadow: 0 0 6px rgba(2,171,193,0.25);
         }
@@ -198,6 +199,17 @@ def inject_base_styles() -> None:
             opacity: 0.85;
             -webkit-mask-image: radial-gradient(circle at 50% 50%, rgba(0,0,0,1) 50%, rgba(0,0,0,0.45) 75%, rgba(0,0,0,0.18) 90%, rgba(0,0,0,0) 100%);
                     mask-image: radial-gradient(circle at 50% 50%, rgba(0,0,0,1) 50%, rgba(0,0,0,0.45) 75%, rgba(0,0,0,0.18) 90%, rgba(0,0,0,0) 100%);
+        }
+        .sticky-right {
+            position: sticky;
+            top: 100px; /* Adjust based on header height */
+            right: 0;
+            width: 300px; /* Fixed width for the right panel */
+            padding: 10px;
+            background-color: #060F25;
+            border-radius: 8px;
+            box-shadow: -5px 0 10px rgba(0,0,0,0.3);
+            z-index: 10;
         }
         </style>
         """,
@@ -518,332 +530,236 @@ def main() -> None:
             # Focus mode: selected preview on the right, tools on the left
             sel = st.session_state.get("selected_scenario")
             left, right = st.columns([7,5])
+
+            # Header (full-width above columns)
+            name_text = (sel or {}).get("desc", "")
+            hdr_left, hdr_right = st.columns([8,4])
+            with hdr_left:
+                st.markdown("#### Scenario workspace")
+                if name_text:
+                    st.caption(name_text)
+                st.caption("Pick mode, run a short segment, compare, and export artifacts.")
+            with hdr_right:
+                _ok = _ping_api(st.session_state.api_base)
+                chip = "🟢 Connected" if _ok else "🔴 Offline"
+                st.markdown(f"<div style='text-align:right'>{chip}</div>", unsafe_allow_html=True)
+                if st.button("← Back to gallery", type="secondary", use_container_width=True):
+                    st.session_state.update(view_mode="gallery", selected_scenario=None, show_ab=False, carousel_anim="")
+                    st.rerun()
+
             with right:
                 try:
                     import base64 as _b64
                     gif_b64 = _b64.b64encode((assets_dir / sel["gif"]).read_bytes()).decode("utf-8") if sel else ""
                 except Exception:
                     gif_b64 = ""
+                # Sticky preview panel
+                st.markdown("<div class='sticky-right card'>", unsafe_allow_html=True)
                 if gif_b64:
-                    st.image(f"data:image/gif;base64,{gif_b64}", use_column_width=True, caption=sel.get("desc",""))
-                if st.button("Back to gallery", type="secondary", use_container_width=True):
-                    st.session_state.update(view_mode="gallery", selected_scenario=None, carousel_anim="")
-                    st.rerun()
+                    st.image(f"data:image/gif;base64,{gif_b64}", use_column_width=True)
+                meta = sel.get("meta", "")
+                if name_text:
+                    st.caption(name_text)
+                if meta:
+                    st.caption(meta)
+                # Small HUD (toggled in overlays on left)
+                if st.session_state.get("show_hud", False):
+                    hud_vals = st.session_state.get("hud_vals", {"fps":"—","pre":"—","model":"—","post":"—"})
+                    st.markdown(
+                        f"""
+                        <div style='text-align:right; font-size:12px; opacity:0.85;'>
+                          FPS {hud_vals.get('fps','—')} — pre {hud_vals.get('pre','—')} ms | model {hud_vals.get('model','—')} ms | post {hud_vals.get('post','—')} ms
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                # Buttons under preview
+                btnc1, btnc2 = st.columns([1,1])
+                with btnc1:
+                    if st.button("Open source MP4", use_container_width=True):
+                        mp4 = (sel or {}).get("mp4")
+                        if mp4 and Path(mp4).exists():
+                            st.success(f"Source: {mp4}")
+                        else:
+                            st.warning("MP4 missing.")
+                with btnc2:
+                    if st.button("Copy path", use_container_width=True):
+                        mp4 = (sel or {}).get("mp4")
+                        st.info(mp4 or "")
+                st.markdown("</div>", unsafe_allow_html=True)
 
             with left:
-                st.markdown("### Overlays & thresholds")
-                # Reuse the existing controls below in a compact layout
-                with st.expander("Overlays & thresholds", expanded=True):
-                    ol1, ol2, ol3, ol4 = st.columns([1, 1, 1, 2])
-                    with ol1:
-                        show_boxes = st.checkbox("Boxes", value=True, key="ov_boxes_gallery")
-                    with ol2:
-                        show_tracks = st.checkbox("Tracks", value=True, key="ov_tracks_gallery")
-                    with ol3:
-                        show_ocr = st.checkbox("OCR", value=True, key="ov_ocr_gallery")
-                    with ol4:
-                        profile = st.radio(
-                            "",
-                            options=["realtime", "accuracy"],
-                            horizontal=True,
-                            index=0,
-                            label_visibility="collapsed",
-                            key="profile_mode_gallery",
-                        )
-                    mask_opacity = st.slider("Mask opacity", 0.0, 1.0, 0.35, 0.05, help="Transparency of segmentation overlays", key="mask_opacity_gallery")
-                    colt1, colt2 = st.columns(2)
-                    with colt1:
-                        conf_thresh = st.slider("Confidence", 0.05, 0.95, 0.35, 0.05, key="conf_thresh_gallery")
-                    with colt2:
-                        nms_iou = st.slider("NMS IoU", 0.05, 0.95, 0.5, 0.05, key="nms_iou_gallery")
-                    class_filter = st.text_input("Class include (comma-separated)", value="", help="Limit overlays to these classes", key="class_filter_gallery")
+                # Mode selector + microcopy
+                profile = st.radio(
+                    "",
+                    options=["realtime", "accuracy"],
+                    horizontal=True,
+                    index=0,
+                    label_visibility="collapsed",
+                    key="profile_mode_focus",
+                )
+                st.caption("Realtime prioritizes throughput. Accuracy prioritizes detail.")
+                # Summary card (using current controls if available)
+                st.markdown("<div class='card'>", unsafe_allow_html=True)
+                st.caption("Profile summary")
+                st.write({
+                    "input_size": 640 if profile == "realtime" else 1024,
+                    "confidence_thresh": st.session_state.get("conf_thresh_focus", 0.35),
+                    "nms_iou": st.session_state.get("nms_iou_focus", 0.5),
+                })
+                st.markdown("</div>", unsafe_allow_html=True)
 
-                st.markdown("### Telemetry")
-                st.markdown('<div class="sticky-hud">', unsafe_allow_html=True)
-                fps_placeholder = st.empty()
-                hud_bar = st.empty()
-                st.markdown('</div>', unsafe_allow_html=True)
-
-                st.caption("WebSocket stream (stub) will print events below.")
-                log_box = st.empty()
-
-                # Existing WS runner kept as-is (invocation omitted here)
-                video = st.session_state.get("video_choice", scenarios[0]["mp4"])
-                api_base = st.session_state.api_base
-                def _run_ws():
-                    try:
-                        from websocket import create_connection
-                    except Exception as e:  # dependency missing
-                        log_box.warning(f"websocket-client not installed: {e}")
-                        return
-                    try:
-                        qs = urlencode({"video_path": video, "profile": profile})
-                        ws = create_connection(f"{api_base.replace('http', 'ws')}/ws/run_video?{qs}")
-                        messages = []
-                        while True:
-                            msg = ws.recv()
-                            if not msg:
-                                break
+                # Primary actions row
+                a1, a2, a3, a4 = st.columns([1.2,1.4,1.1,1.1])
+                running = st.session_state.get("_run10s_running", False)
+                mp4 = (sel or {}).get("mp4")
+                mp4_ok = bool(mp4 and Path(mp4).exists())
+                disabled_common = running or (not _ok) or (not mp4_ok)
+                with a1:
+                    if st.button("Run 10s", type="primary", use_container_width=True, disabled=disabled_common):
+                        if mp4_ok:
+                            st.session_state["_run10s_running"] = True
+                            st.toast("Processing 10 seconds…", icon="▶️")
                             try:
-                                ev = _json.loads(msg)
-                                messages.append(ev)
-                                if ev.get("fps"):
-                                    fps_placeholder.metric("FPS", f"{ev['fps']:.1f}")
-                                t = ev.get("timings", {})
-                                hud_bar.write(f"pre: {t.get('pre',0)} ms | model: {t.get('model',0)} ms | post: {t.get('post',0)} ms")
-                            except Exception:
-                                messages.append({"raw": msg})
-                            # show only last few
-                            log_box.json(messages[-5:])
-                    except Exception as e:
-                        log_box.warning(f"WS error: {e}")
-            ol1, ol2, ol3, ol4 = st.columns([1, 1, 1, 2])
-            with ol1:
-                show_boxes = st.checkbox("Boxes", value=True, key="ov_boxes_focus")
-            with ol2:
-                show_tracks = st.checkbox("Tracks", value=True, key="ov_tracks_focus")
-            with ol3:
-                show_ocr = st.checkbox("OCR", value=True, key="ov_ocr_focus")
-            with ol4:
-                        profile = st.radio(
-                            "",
-                            options=["realtime", "accuracy"],
-                            horizontal=True,
-                            index=0,
-                            label_visibility="collapsed",
-                            key="profile_mode_focus",
-                        )
-            mask_opacity = st.slider("Mask opacity", 0.0, 1.0, 0.35, 0.05, help="Transparency of segmentation overlays", key="mask_opacity_focus")
-            colt1, colt2 = st.columns(2)
-            with colt1:
-                conf_thresh = st.slider("Confidence", 0.05, 0.95, 0.35, 0.05, key="conf_thresh_focus")
-            with colt2:
-                nms_iou = st.slider("NMS IoU", 0.05, 0.95, 0.5, 0.05, key="nms_iou_focus")
-            class_filter = st.text_input("Class include (comma-separated)", value="", help="Limit overlays to these classes", key="class_filter_focus")
+                                requests.post(f"{st.session_state.api_base}/run_video", json={"video_path": mp4, "profile": profile, "duration_s": 10, "emit_video": False}, timeout=120)
+                                st.toast("Finished.", icon="✅")
+                            except Exception as e:
+                                st.warning(f"Run failed: {e}")
+                            st.session_state["_run10s_running"] = False
+                        else:
+                            st.warning("Missing MP4; actions disabled.")
+                with a2:
+                    if st.button("Compare this frame", use_container_width=True, disabled=disabled_common):
+                        try:
+                            requests.post(f"{st.session_state.api_base}/ab_compare", json={"video_path": mp4}, timeout=60)
+                            st.session_state["show_ab"] = True
+                            st.toast("Compare images ready.", icon="🌓")
+                        except Exception as e:
+                            st.warning(f"Compare failed: {e}")
+                with a3:
+                    if st.button("Stop run", use_container_width=True, disabled=running or (not _ok)):
+                        try:
+                            requests.post(f"{st.session_state.api_base}/run_control", json={"action":"stop"}, timeout=10)
+                            st.toast("Stopped.", icon="⏹️")
+                        except Exception as e:
+                            st.warning(f"Stop failed: {e}")
+                with a4:
+                    if st.button("Clear results", use_container_width=True, disabled=not _ok):
+                        try:
+                            requests.post(f"{st.session_state.api_base}/clear", timeout=10)
+                        except Exception:
+                            pass
+                        st.session_state["show_ab"] = False
+                        st.toast("Cleared.", icon="🧹")
 
-        # Stop after focus view to avoid rendering unrelated sections
-        st.stop()
+                # Overlays & thresholds
+                st.markdown("### Overlays & thresholds")
+                ov1, ov2, ov3, ov4 = st.columns([1,1,1,1])
+                with ov1:
+                    show_boxes = st.checkbox("Boxes", value=True, key="ov_boxes_focus")
+                with ov2:
+                    show_tracks = st.checkbox("Tracks", value=True, key="ov_tracks_focus")
+                with ov3:
+                    show_ocr = st.checkbox("OCR", value=True, key="ov_ocr_focus")
+                with ov4:
+                    st.session_state["show_hud"] = st.checkbox("HUD", value=st.session_state.get("show_hud", False), key="ov_hud_focus")
 
-        # Auto-start behavior removed
+                with st.expander("Advanced thresholds", expanded=False):
+                    mask_opacity = st.slider("Mask opacity", 0.0, 1.0, st.session_state.get("mask_opacity_focus", 0.35), 0.05, help="Transparency of segmentation overlays", key="mask_opacity_focus")
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        conf_thresh = st.slider("Confidence", 0.05, 0.95, st.session_state.get("conf_thresh_focus", 0.35), 0.05, help="Filter low-score detections.", key="conf_thresh_focus")
+                    with c2:
+                        nms_iou = st.slider("NMS IoU", 0.05, 0.95, st.session_state.get("nms_iou_focus", 0.5), 0.05, help="Merge overlapping boxes.", key="nms_iou_focus")
+                    class_filter = st.text_input("Class include (comma-separated)", value=st.session_state.get("class_filter_focus", ""), help="Limit overlays to these classes", key="class_filter_focus")
+                    if st.button("Reset to defaults", use_container_width=False):
+                        st.session_state.update(mask_opacity_focus=0.35, conf_thresh_focus=0.35, nms_iou_focus=0.5, class_filter_focus="", ov_boxes_focus=True, ov_tracks_focus=True, ov_ocr_focus=True)
+                        st.toast("Thresholds reset.", icon="↩️")
 
-        # Render Quick actions + image utilities ONLY in focus mode
-        if st.session_state.view_mode == "focus":
-            st.markdown("---")
-            st.subheader("Quick actions")
-            colq1, colq2 = st.columns(2)
-            with colq1:
-                if st.button("Show last annotated frame"):
+                # A/B slider section
+                st.markdown("### Profile compare (single frame)")
+                from pathlib import Path as _P
+                rt_img = _P("runs/latest/realtime_frame.png")
+                ac_img = _P("runs/latest/accuracy_frame.png")
+                if st.session_state.get("show_ab") and rt_img.exists() and ac_img.exists():
                     try:
-                        last = requests.get(f"{api_base}/last_event", timeout=8).json()
+                        from streamlit_image_comparison import image_comparison
+                        image_comparison(img1=str(rt_img), img2=str(ac_img), label1="Realtime", label2="Accuracy", width=700)
+                        if st.button("Save composite"):
+                            try:
+                                from PIL import Image as PILImage
+                                L = PILImage.open(rt_img)
+                                R = PILImage.open(ac_img)
+                                composite = PILImage.new("RGB", L.size)
+                                composite.paste(L, (0,0))
+                                composite.paste(R, (L.width//2,0))
+                                out_path = _P("runs/latest/ab_composite.png")
+                                composite.save(out_path)
+                                st.success(f"Saved {out_path}")
+                            except Exception as e:
+                                st.warning(f"Save failed: {e}")
+                        st.caption("Realtime (left) — Accuracy (right)")
+                    except Exception:
+                        st.info("Install streamlit-image-comparison for slider.")
+                else:
+                    st.caption("Click 'Compare this frame' to populate.")
+
+                # Telemetry compact table
+                st.markdown("### Telemetry")
+                # Fetch/refresh last event (simple polling) and append to rows
+                rows = st.session_state.get("telemetry_rows", [])
+                if _ok:
+                    try:
+                        last = requests.get(f"{st.session_state.api_base}/last_event", timeout=6).json()
                         evt = last.get("event") or {}
-                        meta_col, img_col = st.columns([1, 2])
-                        with meta_col:
-                            st.caption("Timings (ms)")
-                            st.json(evt.get("timings", {}))
-                            st.caption("Provider")
-                            st.json(evt.get("provider_provenance", {}))
-                        with img_col:
-                            if evt.get("annotated_b64"):
-                                st.image(evt["annotated_b64"], caption="Last annotated", use_column_width=True)
-                            else:
-                                st.info("No annotated image found.")
-                    except Exception as e:
-                        st.warning(f"Failed to load last annotated frame: {e}")
-            with colq2:
-                if st.button("Interview Mode (2 min)"):
-                    st.info("Guided walkthrough placeholder.")
-
-            st.markdown("---")
-            st.subheader("Single-frame detection test")
-            uploaded = st.file_uploader("Upload image (jpg/png)", type=["jpg","jpeg","png"])
-            with st.expander("Provider override (optional)"):
-                det_provider = st.radio("Detection provider", ["default","replicate","hf","roboflow"], horizontal=True, index=0)
-                det_model = st.text_input("Detector model/version (provider-specific)", value="ultralytics/yolov8")
-                ocr_provider = st.radio("OCR provider", ["default","replicate","gcv","azure","textract"], horizontal=True, index=0)
-                ocr_version = st.text_input("OCR version (Replicate PaddleOCR)", value="")
-            if uploaded and st.button("Run /run_frame"):
-                import base64
-                img_b64 = base64.b64encode(uploaded.read()).decode("utf-8")
-                try:
-                    with st.spinner("Running /run_frame..."):
-                        override = None
-                        if det_provider != "default":
-                            override = {"detection": {"provider": det_provider, "model": det_model}}
-                        if ocr_provider != "default":
-                            override = override or {}
-                            override.update({"ocr": {"provider": ocr_provider}})
-                            if ocr_provider == "replicate" and ocr_version:
-                                override["ocr"]["version"] = ocr_version
-                        overlay_opts = {
-                            "class_include": [c.strip() for c in class_filter.split(",") if c.strip()],
-                            "mask_opacity": mask_opacity,
-                            "conf_thresh": conf_thresh,
-                            "nms_iou": nms_iou,
-                            "show_boxes": show_boxes,
-                            "show_tracks": show_tracks,
-                            "show_ocr": show_ocr,
-                        }
-                        payload = {"image_b64": img_b64, "profile": profile, "provider_override": override, "overlay_opts": overlay_opts}
-                        resp = requests.post(f"{api_base}/run_frame", json=payload, timeout=30)
-                    data = resp.json()
-                    col_a, col_b = st.columns(2)
-                    with col_a:
-                        st.caption("Response JSON")
-                        st.json(data)
-                        if data.get("ocr"):
-                            st.caption("OCR")
-                            st.write(", ".join([o.get("text", "") for o in data.get("ocr", [])]))
-                    with col_b:
-                        if data.get("annotated_b64"):
-                            st.caption("Annotated")
-                            st.image(data["annotated_b64"], caption="Overlay", use_column_width=True)
-                        else:
-                            st.info("No annotated image returned.")
-                except Exception as e:
-                    st.warning(f"/run_frame failed: {e}")
-
-            st.markdown("---")
-            st.subheader("Realtime vs Accuracy (single image)")
-            uploaded_cmp = st.file_uploader("Upload image for compare", type=["jpg","jpeg","png"], key="cmp")
-            if uploaded_cmp and st.button("Compare profiles"):
-                st.info("Profile compare placeholder.")
-
-        st.markdown("---")
-        st.subheader("Quick actions")
-        colq1, colq2 = st.columns(2)
-        with colq1:
-            if st.button("Show last annotated frame"):
-                try:
-                    last = requests.get(f"{api_base}/last_event", timeout=8).json()
-                    evt = last.get("event") or {}
-                    meta_col, img_col = st.columns([1, 2])
-                    with meta_col:
-                        st.caption("Timings (ms)")
-                        st.json(evt.get("timings", {}))
-                        st.caption("Provider")
-                        st.json(evt.get("provider_provenance", {}))
-                    with img_col:
-                        if evt.get("annotated_b64"):
-                            st.image(evt["annotated_b64"], caption="Last annotated", use_column_width=True)
-                        else:
-                            st.info("No annotated image found.")
-                except Exception as e:
-                    st.warning(f"Failed to load last annotated frame: {e}")
-        with colq2:
-            if st.button("Interview Mode (2 min)"):
-                try:
-                    import time as _time
-                    st.toast("Running realtime profile…", icon="▶️")
-                    requests.post(f"{api_base}/run_video", json={"video_path": "data/samples/day.mp4", "profile": "realtime"}, timeout=10)
-                    _time.sleep(5)
-                    st.toast("Comparing profiles…", icon="🌓")
-                    # Use the comparison block by triggering programmatically is tricky; show inline compare here
-                    # Ask for one frame in both profiles and display side-by-side if image is uploaded later
-                    st.info("Upload an image below to complete the realtime vs accuracy comparison.")
-                    st.toast("Generating metrics…", icon="📈")
-                    try:
-                        requests.get(f"{api_base}/metrics", timeout=5)
+                        if evt:
+                            rec = {
+                                "frame_id": evt.get("frame_id"),
+                                "fps": evt.get("fps"),
+                                "pre_ms": (evt.get("latency_ms") or {}).get("pre"),
+                                "model_ms": (evt.get("latency_ms") or {}).get("model"),
+                                "post_ms": (evt.get("latency_ms") or {}).get("post"),
+                                "provider": (evt.get("provider_provenance") or {}).get("detector"),
+                                "level": (evt.get("level") or "info"),
+                            }
+                            rows.append(rec)
+                            rows = rows[-100:]
+                            st.session_state["telemetry_rows"] = rows
+                            # update HUD snapshot
+                            st.session_state["hud_vals"] = {"fps": rec.get("fps"), "pre": rec.get("pre_ms"), "model": rec.get("model_ms"), "post": rec.get("post_ms")}
                     except Exception:
                         pass
-                    st.toast("Building PDF…", icon="📄")
-                    last = requests.get(f"{api_base}/last_event", timeout=8).json()
-                    rid = last.get("run_id")
-                    if rid:
-                        rep = requests.post(f"{api_base}/report", json={"run_id": rid}, timeout=30).json()
-                        st.success(rep)
-                        st.toast(f"Report saved to {rep.get('report_path')}", icon="✅")
-                    else:
-                        st.info("No recent run to report.")
-                except Exception as e:
-                    st.warning(f"Interview Mode encountered an issue: {e}")
+                errors_only = st.checkbox("Errors only", key="telemetry_errors_only")
+                view_rows = rows
+                if errors_only:
+                    view_rows = [r for r in rows if r.get("level") in ["warn","error","timeout"]]
+                if view_rows:
+                    import pandas as pd
+                    df = pd.DataFrame(view_rows)[["frame_id","fps","pre_ms","model_ms","post_ms","provider","level"]]
+                    st.dataframe(df.tail(100), use_container_width=True, height=240)
+                else:
+                    st.caption("WebSocket stream (stub) will print events below.")
+                    st.info("No telemetry yet.")
 
-        st.markdown("---")
-        st.subheader("Single-frame detection test")
-        uploaded = st.file_uploader("Upload image (jpg/png)", type=["jpg","jpeg","png"])
-        with st.expander("Provider override (optional)"):
-            det_provider = st.radio("Detection provider", ["default","replicate","hf","roboflow"], horizontal=True, index=0)
-            det_model = st.text_input("Detector model/version (provider-specific)", value="ultralytics/yolov8")
-            ocr_provider = st.radio("OCR provider", ["default","replicate","gcv","azure","textract"], horizontal=True, index=0)
-            ocr_version = st.text_input("OCR version (Replicate PaddleOCR)", value="")
-        if uploaded and st.button("Run /run_frame"):
-            import base64
-            img_b64 = base64.b64encode(uploaded.read()).decode("utf-8")
-            try:
-                with st.spinner("Running /run_frame..."):
-                    override = None
-                    if det_provider != "default":
-                        override = {"detection": {"provider": det_provider, "model": det_model}}
-                    if ocr_provider != "default":
-                        override = override or {}
-                        override.update({"ocr": {"provider": ocr_provider}})
-                        if ocr_provider == "replicate" and ocr_version:
-                            override["ocr"]["version"] = ocr_version
-                    overlay_opts = {
-                        "class_include": [c.strip() for c in class_filter.split(",") if c.strip()],
-                        "mask_opacity": mask_opacity,
-                        "conf_thresh": conf_thresh,
-                        "nms_iou": nms_iou,
-                        "show_boxes": show_boxes,
-                        "show_tracks": show_tracks,
-                        "show_ocr": show_ocr,
-                    }
-                    payload = {"image_b64": img_b64, "profile": profile, "provider_override": override, "overlay_opts": overlay_opts}
-                    resp = requests.post(f"{api_base}/run_frame", json=payload, timeout=30)
-                data = resp.json()
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    st.caption("Response JSON")
-                    st.json(data)
-                    if data.get("ocr"):
-                        st.caption("OCR")
-                        st.write(", ".join([o.get("text", "") for o in data.get("ocr", [])]))
-                with col_b:
-                    if data.get("annotated_b64"):
-                        st.caption("Annotated")
-                        st.image(data["annotated_b64"], caption="Overlay", use_column_width=True)
-                    else:
-                        st.info("No annotated image returned.")
-            except Exception as e:
-                st.warning(f"/run_frame failed: {e}")
+                # Artifacts panel
+                st.markdown("### Artifacts")
+                last_frame = _P("runs/latest/last_frame.png")
+                out_mp4 = _P("runs/latest/out.mp4")
+                report_pdf = _P("runs/latest/report.pdf")
+                ac1, ac2 = st.columns([1,1])
+                with ac1:
+                    if last_frame.exists():
+                        st.image(str(last_frame), caption="last_frame.png", use_column_width=True)
+                        if st.button("Copy path (last_frame.png)"):
+                            st.info(str(last_frame))
+                with ac2:
+                    if out_mp4.exists():
+                        st.video(str(out_mp4))
+                    if report_pdf.exists():
+                        st.markdown(f"[Open report]({report_pdf.as_posix()})")
+                st.caption("Artifacts reflect the current mode and overlay settings at capture time.")
 
-        st.markdown("---")
-        st.subheader("Realtime vs Accuracy (single image)")
-        uploaded_cmp = st.file_uploader("Upload image for compare", type=["jpg","jpeg","png"], key="cmp")
-        if uploaded_cmp and st.button("Compare profiles"):
-            import base64
-            img_bytes = uploaded_cmp.read()
-            img_b64 = base64.b64encode(img_bytes).decode("utf-8")
-            try:
-                with st.spinner("Comparing profiles..."):
-                    rt = requests.post(f"{api_base}/run_frame", json={"image_b64": img_b64, "profile": "realtime"}, timeout=30).json()
-                    acc = requests.post(f"{api_base}/run_frame", json={"image_b64": img_b64, "profile": "accuracy"}, timeout=30).json()
-                from streamlit_image_comparison import image_comparison
-                if rt.get("annotated_b64") and acc.get("annotated_b64"):
-                    image_comparison(
-                        img1=rt["annotated_b64"],
-                        img2=acc["annotated_b64"],
-                        label1="Realtime",
-                        label2="Accuracy",
-                        width=700,
-                    )
-                    # Simple heatmap diff toggle
-                    if st.checkbox("Show difference heatmap"):
-                        import numpy as _np
-                        import base64 as _b64
-                        import cv2 as _cv
-                        def _decode(b):
-                            arr = _np.frombuffer(_b64.b64decode(b), dtype=_np.uint8)
-                            return _cv.imdecode(arr, _cv.IMREAD_COLOR)
-                        a = _decode(rt["annotated_b64"])
-                        b = _decode(acc["annotated_b64"])
-                        if a is not None and b is not None and a.shape == b.shape:
-                            diff = _cv.absdiff(a, b)
-                            heat = _cv.applyColorMap(_cv.cvtColor(_cv.cvtColor(diff, _cv.COLOR_BGR2GRAY), _cv.COLOR_GRAY2BGR), _cv.COLORMAP_JET)
-                            ok, buf = _cv.imencode('.jpg', heat)
-                            if ok:
-                                st.image(_b64.b64encode(buf.tobytes()).decode('utf-8'), caption="Difference heatmap", use_column_width=True)
-            except Exception as e:
-                st.warning(f"Compare failed: {e}")
+                # Note: Single-image tools have been removed from the focus view per requirements.
 
     with tab_eval:
         st.subheader("Evaluate")
