@@ -56,7 +56,7 @@ def inject_base_styles() -> None:
         .top-banner img { max-height: 173px; display: block; margin: 0; }
         .stButton>button { transition: all 200ms ease-in-out; border-radius: 8px; }
         .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 12px 14px; border-radius: 12px; box-shadow: 0 6px 18px rgba(0,0,0,0.18); }
-        .sticky-right { position: sticky; top: 10px; }
+        .sticky-right { position: sticky; top: 90px; }
         .sticky-hud { position: sticky; top: 6px; z-index: 100; background: rgba(6,15,37,0.85); backdrop-filter: blur(4px); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(2,171,193,0.2); }
 
         /* Centering helpers */
@@ -400,8 +400,8 @@ def main() -> None:
                 st.markdown("</div>", unsafe_allow_html=True)
 
         if st.session_state.view_mode == "gallery":
-            # Single bordered wrapper via Streamlit form so border encloses cards + buttons
-            with st.form("carousel_form"):
+            # Single bordered wrapper using a simple container + HTML frame
+            with st.container():
                 import base64 as _b64
                 def _card_html(idx: int, highlight: bool) -> str:
                     item = scenarios[idx]
@@ -460,64 +460,32 @@ def main() -> None:
                         + _card_html(right_i, False)
                     )
 
+                st.markdown("<div class='carousel-frame'>", unsafe_allow_html=True)
                 st.markdown(
                     f"<div class='carousel-viewport'><div class='{track_class}' style='{track_style}'>{track_html}</div></div>",
                     unsafe_allow_html=True,
                 )
 
-                # Centered buttons under center card using custom PNG assets as backgrounds
-                btn_left = (assets_dir / "btn-left.png")
-                btn_right = (assets_dir / "btn-right.png")
-                btn_select = (assets_dir / "btn-select.png")
-                try:
-                    b64_left = _b64.b64encode(btn_left.read_bytes()).decode("utf-8") if btn_left.exists() else ""
-                    b64_right = _b64.b64encode(btn_right.read_bytes()).decode("utf-8") if btn_right.exists() else ""
-                    b64_select = _b64.b64encode(btn_select.read_bytes()).decode("utf-8") if btn_select.exists() else ""
-                except Exception:
-                    b64_left = b64_right = b64_select = ""
-                st.markdown(
-                    f"""
-                    <style>
-                    .carousel-btn-row {{ display: flex; justify-content: center; gap: 0; margin: 5px 0; }}
-                    .carousel-btn-row .stButton {{ width: auto !important; display: inline-block; margin: 0; }}
-                    .carousel-btn-row .stButton > button {{
-                        width: calc(var(--cardw)/3); height: 48px;
-                        color: transparent; text-shadow: none; border-radius: 14px;
-                        background-color: #0b1a33; background-repeat: no-repeat; background-position: center; background-size: contain;
-                    }}
-                    .carousel-btn-left .stButton > button {{ background-image: url('data:image/png;base64,{b64_left}'); }}
-                    .carousel-btn-select .stButton > button {{ border: 3px solid #ffffff !important; font-weight: 800; color: #e6fbfe; background-image: none; }}
-                    .carousel-btn-right .stButton > button {{ background-image: url('data:image/png;base64,{b64_right}'); }}
-                    .carousel-btn-row .stButton + .stButton > button {{ margin-left: -1px; }}
-                    </style>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                # Buttons row (non-form buttons)
+                cbl, cbs, cbr = st.columns([1,1,1])
+                prev_clicked = cbl.button("< PREV")
+                select_clicked = cbs.button("SELECT")
+                next_clicked = cbr.button("NEXT >")
+                st.markdown("</div>", unsafe_allow_html=True)
 
-                sp_l, center_btns, sp_r = st.columns([1, 4, 1])
-                with center_btns:
-                    st.markdown("<div class='carousel-btn-row'>", unsafe_allow_html=True)
-                    cbl, cbs, cbr = st.columns([1,1,1])
-                    with cbl:
-                        st.markdown("<div class='carousel-btn-left'>", unsafe_allow_html=True)
-                        prev_clicked = st.form_submit_button("< PREV", use_container_width=False)
-                        st.markdown("</div>", unsafe_allow_html=True)
-                    with cbs:
-                        st.markdown("<div class='carousel-btn-select'>", unsafe_allow_html=True)
-                        select_clicked = st.form_submit_button("SELECT", use_container_width=False)
-                        st.markdown("</div>", unsafe_allow_html=True)
-                    with cbr:
-                        st.markdown("<div class='carousel-btn-right'>", unsafe_allow_html=True)
-                        next_clicked = st.form_submit_button("NEXT >", use_container_width=False)
-                        st.markdown("</div>", unsafe_allow_html=True)
-                    st.markdown("</div>", unsafe_allow_html=True)
             if prev_clicked:
                 st.session_state["carousel_anim"] = "prev"
                 st.session_state["scenario_idx"] = (mid - 1) % n
+                st.rerun()
             if select_clicked:
                 st.session_state["video_choice"] = scenarios[mid]["mp4"]
                 st.session_state["selected_scenario"] = scenarios[mid]
                 st.session_state["view_mode"] = "focus"
+                st.rerun()
+            if next_clicked:
+                st.session_state["carousel_anim"] = "next"
+                st.session_state["scenario_idx"] = (mid + 1) % n
+                st.rerun()
 
             # Clear anim flag after render so next draw is stable
             if st.session_state.get("carousel_anim"):
