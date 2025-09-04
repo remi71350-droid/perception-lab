@@ -580,7 +580,20 @@ def main() -> None:
                             st.session_state["has_run"] = True
                             st.toast("Processing 10 seconds…", icon="▶️")
                             try:
-                                requests.post(f"{st.session_state.api_base}/run_video", json={"video_path": mp4, "profile": profile, "duration_s": 10, "emit_video": False}, timeout=120)
+                                # Build overlays and thresholds payload from UI state
+                                overlays = {
+                                    "boxes": st.session_state.get("ov_boxes_focus", True),
+                                    "tracks": st.session_state.get("ov_tracks_focus", True),
+                                    "ocr": st.session_state.get("ov_ocr_focus", True),
+                                    "hud": st.session_state.get("ov_hud_focus", False),
+                                }
+                                thresholds = {
+                                    "confidence": st.session_state.get("conf_thresh_focus", 0.35),
+                                    "nms_iou": st.session_state.get("nms_iou_focus", 0.5),
+                                    "mask_opacity": st.session_state.get("mask_opacity_focus", 0.35),
+                                    "include": st.session_state.get("class_filter_focus", ""),
+                                }
+                                requests.post(f"{st.session_state.api_base}/run_video", json={"video_path": mp4, "profile": profile, "duration_s": 10, "emit_video": False, "overlays": overlays, "thresholds": thresholds}, timeout=120)
                                 st.toast("Finished.", icon="✅")
                             except Exception as e:
                                 st.warning(f"Run failed: {e}")
@@ -667,29 +680,34 @@ def main() -> None:
                 # Telemetry compact table
                 if st.session_state.get("has_run"):
                     st.markdown("### Telemetry")
-                    # Fetch/refresh last event (simple polling) and append to rows
-                    rows = st.session_state.get("telemetry_rows", [])
-                    if _ok:
-                        try:
-                            last = requests.get(f"{st.session_state.api_base}/last_event", timeout=6).json()
-                            evt = last.get("event") or {}
-                            if evt:
-                                rec = {
-                                    "frame_id": evt.get("frame_id"),
-                                    "fps": evt.get("fps"),
-                                    "pre_ms": (evt.get("latency_ms") or {}).get("pre"),
-                                    "model_ms": (evt.get("latency_ms") or {}).get("model"),
-                                    "post_ms": (evt.get("latency_ms") or {}).get("post"),
-                                    "provider": (evt.get("provider_provenance") or {}).get("detector"),
-                                    "level": (evt.get("level") or "info"),
-                                }
-                                rows.append(rec)
-                                rows = rows[-100:]
-                                st.session_state["telemetry_rows"] = rows
-                                # update HUD snapshot
-                                st.session_state["hud_vals"] = {"fps": rec.get("fps"), "pre": rec.get("pre_ms"), "model": rec.get("model_ms"), "post": rec.get("post_ms")}
-                        except Exception:
-                            pass
+                    # Prefer reading events.jsonl if present
+                    rows = []
+                    try:
+                        from pathlib import Path as _P
+                        ev_path = _P("runs/latest/events.jsonl")
+                        if ev_path.exists():
+                            import json as _json
+                            with ev_path.open("r", encoding="utf-8") as fh:
+                                for line in fh.readlines()[-200:]:
+                                    try:
+                                        ev = _json.loads(line.strip())
+                                        rows.append({
+                                            "frame_id": ev.get("frame_id"),
+                                            "fps": ev.get("fps"),
+                                            "pre_ms": (ev.get("latency_ms") or {}).get("pre"),
+                                            "model_ms": (ev.get("latency_ms") or {}).get("model"),
+                                            "post_ms": (ev.get("latency_ms") or {}).get("post"),
+                                            "provider": (ev.get("provider_provenance") or {}).get("detector"),
+                                            "level": ev.get("level", "info"),
+                                        })
+                                    except Exception:
+                                        continue
+                            # update HUD snapshot from last row
+                            if rows:
+                                last = rows[-1]
+                                st.session_state["hud_vals"] = {"fps": last.get("fps"), "pre": last.get("pre_ms"), "model": last.get("model_ms"), "post": last.get("post_ms")}
+                    except Exception:
+                        rows = st.session_state.get("telemetry_rows", [])
                     errors_only = st.checkbox("Errors only", key="telemetry_errors_only")
                     view_rows = rows
                     if errors_only:
@@ -710,13 +728,19 @@ def main() -> None:
                 with ac1:
                     if last_frame.exists():
                         st.image(str(last_frame), caption="last_frame.png", use_column_width=True)
-                        if st.button("Copy path (last_frame.png)"):
-                            st.info(str(last_frame))
+                        cpl, cpr = st.columns([1,3])
+                        with cpl:
+                            if st.button("Copy path (image)"):
+                                st.info(str(last_frame))
                 with ac2:
                     if out_mp4.exists():
                         st.video(str(out_mp4))
+                        if st.button("Copy path (video)"):
+                            st.info(str(out_mp4))
                     if report_pdf.exists():
-                        st.markdown(f"[Open report]({report_pdf.as_posix()})")
+                        st.link_button("Open report (PDF)", report_pdf.as_posix(), use_container_width=True)
+                        if st.button("Copy path (report)"):
+                            st.info(str(report_pdf))
                 st.caption("Artifacts reflect the current mode and overlay settings at capture time.")
 
                 # Keyboard shortcuts: space (Run 10s), b (Compare), esc (Back)
