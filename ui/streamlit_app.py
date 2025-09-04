@@ -106,15 +106,15 @@ def inject_base_styles() -> None:
             align-items: center;
             width: clamp(200px, 16.5vw, 300px);
         }
-        .gif-card img { display: block; width: 100%; height: auto; }
+        .gif-card img { display: block; width: 100%; height: auto; object-fit: contain; }
         .gif-card .gif-cap { color: #cfeaf0; font-size: 12px; margin-top: 8px; }
         .gif-card .gif-title { color: #e6fbfe; font-size: 1.15rem; font-weight: 800; text-align: center; }
         .gif-card .gif-sub { color: #cfeaf0; font-size: 1.0rem; font-weight: 700; text-align: center; }
         .gif-card .gif-desc { color: #9fc7ce; font-size: 0.95rem; margin-top: 2px; text-align: center; }
         .gif-card .gif-fn { color: #9fc7ce; font-size: 0.85rem; margin-top: 8px; word-break: break-all; text-align: center; }
-        .carousel-frame { border: 1px solid #ffffff; border-radius: 10px; padding: 12px 16px; margin-top: 8px; }
-        .carousel-row { display: flex; gap: 16px; justify-content: center; align-items: stretch; }
-        .gif-card.highlight { border: 2px solid #ffffff; box-shadow: 0 0 0 2px rgba(255,255,255,0.12) inset; }
+        .carousel-frame { border: 1px solid #ffffff; border-radius: 10px; padding: 16px; margin: 10px auto; display: inline-block; }
+        .carousel-row { display: flex; gap: 12px; justify-content: center; align-items: stretch; }
+        .gif-card.highlight { border: 3px solid #ffffff; box-shadow: 0 0 0 2px rgba(255,255,255,0.12) inset; }
         .carousel-ctrl { display: flex; justify-content: center; align-items: center; gap: 14px; margin-top: 8px; }
         .carousel-ctrl .stButton>button { font-weight: 700; padding: 8px 16px; }
 
@@ -329,11 +329,18 @@ def main() -> None:
                 st.markdown("</div>", unsafe_allow_html=True)
 
         # Outer frame
+        # Center the entire carousel block
+        st.markdown('<div style="display:flex;justify-content:center;">', unsafe_allow_html=True)
         st.markdown('<div class="carousel-frame">', unsafe_allow_html=True)
         row_l, row_c, row_r = st.columns([1,1,1], gap="small")
+        with row_l:
+            st.markdown('<div class="carousel-row">', unsafe_allow_html=True)
         render_card(row_l, left_i, show_prev=True)
         render_card(row_c, mid, show_select=True, highlight=True)
         render_card(row_r, right_i, show_next=True)
+        with row_r:
+            st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
         with st.expander("Overlays & thresholds", expanded=True):
