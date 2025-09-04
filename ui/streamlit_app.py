@@ -15,16 +15,30 @@ def get_logo_path() -> Path:
     # Resolve path to assets/pl-ani.gif relative to this file
     return Path(__file__).resolve().parents[1] / "assets" / "pl-ani.gif"
 
+def get_splash_logo_path() -> Path:
+    # Prefer pl-loop.gif for splash if present, else fall back to pl-ani.gif
+    assets = Path(__file__).resolve().parents[1] / "assets"
+    loop = assets / "pl-loop.gif"
+    return loop if loop.exists() else assets / "pl-ani.gif"
+
 
 def inject_base_styles() -> None:
     st.markdown(
         """
         <style>
+        :root { --cardw: 310px; }
         /* App background */
         .stApp { background-color: #060F25; }
+        /* Global font family */
+        html, body, .stApp, [class^="css"], [class*=" css"], .stMarkdown, .stText, .stButton, .stTabs {
+            font-family: 'Century Gothic', CenturyGothic, AppleGothic, 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif !important;
+        }
         /* Remove default top gaps so banner is flush */
         [data-testid="stHeader"] { display: none; }
-        .block-container { padding-top: 0 !important; }
+        .block-container { padding-top: 0 !important; padding-bottom: 0 !important; }
+        .block-container > div:first-child { margin-top: 0 !important; }
+        .block-container > div:last-child { margin-bottom: 0 !important; }
+        .stMain { padding-top: 0 !important; padding-bottom: 0 !important; }
 
         /* Headings color */
         h1, h2, h3, h4, h5, h6 { color: #02ABC1 !important; }
@@ -39,7 +53,7 @@ def inject_base_styles() -> None:
             padding: 0;
             margin: 0;
         }
-        .top-banner img { max-height: 192px; display: block; }
+        .top-banner img { max-height: 173px; display: block; margin: 0; }
         .stButton>button { transition: all 200ms ease-in-out; border-radius: 8px; }
         .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); padding: 12px 14px; border-radius: 10px; }
         .sticky-hud { position: sticky; top: 6px; z-index: 100; background: rgba(6,15,37,0.85); backdrop-filter: blur(4px); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(2,171,193,0.2); }
@@ -51,7 +65,9 @@ def inject_base_styles() -> None:
         .hotkeys { color: #8fbac0; font-size: 12px; }
 
         /* Tabs: larger, distinct, high-contrast */
-        .stTabs { margin-top: 6px; }
+        .stTabs { margin-top: 0 !important; margin-bottom: 0 !important; }
+        .stTabs [data-baseweb="tab-list"] { margin: 0 !important; }
+        .stTabs + div { margin-top: 0 !important; }
         .stTabs [data-baseweb="tab-list"] {
             display: flex;
             gap: 14px;
@@ -60,12 +76,12 @@ def inject_base_styles() -> None:
             padding-bottom: 8px;
         }
         .stTabs [data-baseweb="tab"] {
-            font-family: "Segoe UI", "Inter", system-ui, -apple-system, sans-serif;
-            font-weight: 800;
-            font-size: 1.45rem; /* larger */
+            font-family: 'Century Gothic', CenturyGothic, AppleGothic, 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif;
+            font-weight: 900 !important;
+            font-size: 2rem !important; /* tuned down */
             letter-spacing: 0.015em;
-            color: #cfeaf0;
-            padding: 14px 20px;
+            color: #02ABC1; /* default: blue-green */
+            padding: 18px 24px;
             border-radius: 14px 14px 0 0;
             background: rgba(255,255,255,0.04);
             border: 1px solid rgba(255,255,255,0.12);
@@ -75,16 +91,19 @@ def inject_base_styles() -> None:
             text-align: center;
             min-width: 0;
         }
+        .stTabs [data-baseweb="tab"] * { font-size: inherit !important; font-weight: inherit !important; line-height: 1.25 !important; }
         .stTabs [data-baseweb="tab"]:hover {
             color: #e6fbfe;
             background: rgba(2,171,193,0.12);
             border-color: rgba(2,171,193,0.35);
         }
         .stTabs [aria-selected="true"] {
-            color: #02ABC1 !important;
+            color: #ffffff !important; /* selected: white */
             background: linear-gradient(180deg, rgba(2,171,193,0.22), rgba(2,171,193,0.06));
             border-color: rgba(2,171,193,0.55);
             box-shadow: 0 0 0 1px rgba(2,171,193,0.35), 0 8px 18px rgba(2,171,193,0.16);
+            font-weight: 900 !important;
+            text-shadow: 0 0 6px rgba(2,171,193,0.25);
         }
         .stTabs [data-baseweb="tab"]:focus-visible {
             outline: none;
@@ -104,7 +123,7 @@ def inject_base_styles() -> None:
             display: flex;
             flex-direction: column;
             align-items: center;
-            width: clamp(200px, 16.5vw, 300px);
+            width: var(--cardw); /* fixed card width to aid centering in 5-col layout */
         }
         .gif-card img { display: block; width: 100%; height: auto; object-fit: contain; }
         .gif-card .gif-cap { color: #cfeaf0; font-size: 12px; margin-top: 8px; }
@@ -112,8 +131,46 @@ def inject_base_styles() -> None:
         .gif-card .gif-sub { color: #cfeaf0; font-size: 1.0rem; font-weight: 700; text-align: center; }
         .gif-card .gif-desc { color: #9fc7ce; font-size: 0.95rem; margin-top: 2px; text-align: center; }
         .gif-card .gif-fn { color: #9fc7ce; font-size: 0.85rem; margin-top: 8px; word-break: break-all; text-align: center; }
-        .carousel-frame { border: 1px solid #ffffff; border-radius: 10px; padding: 16px; margin: 10px auto; display: inline-block; }
+        /* Use Streamlit form as a reliable wrapper for the trio so the border encloses cards + buttons */
+        [data-testid="stForm"] {
+            border: 1px solid #ffffff;
+            border-radius: 10px;
+            padding: 4px 10px; /* very tight vertical padding */
+            margin: 0 auto;  /* tighter outer spacing */
+            background: rgba(255,255,255,0.02);
+            text-align: center;
+        }
+        .carousel-frame { display: inline-block; margin: 0; }
+        .carousel-viewport { width: calc(3 * var(--cardw)); overflow: hidden; margin: 0 auto; }
+        .carousel-track { display: flex; gap: 0; will-change: transform; }
+        .slide-next { transform: translateX(0); animation: slideNext 280ms ease-out forwards; }
+        .slide-prev { transform: translateX(calc(-3 * var(--cardw))); animation: slidePrev 280ms ease-out forwards; }
+        @keyframes slideNext {
+            from { transform: translateX(0); }
+            to { transform: translateX(calc(-3 * var(--cardw))); }
+        }
+        @keyframes slidePrev {
+            from { transform: translateX(calc(-3 * var(--cardw))); }
+            to { transform: translateX(0); }
+        }
         .carousel-row { display: flex; gap: 12px; justify-content: center; align-items: stretch; }
+
+        /* Button row: make form buttons large, adjacent, centered under center card */
+        [data-testid="stForm"] .stButton { display: inline-block; margin: 0; }
+        [data-testid="stForm"] .stButton > button {
+            width: calc(var(--cardw)/3);
+            height: 44px;
+            font-size: 22px;
+            font-weight: 700;
+            border-radius: 0;
+        }
+        /* Remove seams between adjacent buttons */
+        [data-testid="stForm"] .stButton + .stButton > button { margin-left: -1px; }
+        /* Emphasize the middle (Select) button */
+        [data-testid="stForm"] .stButton:nth-of-type(2) > button {
+            border: 3px solid #ffffff !important;
+            background: rgba(255,255,255,0.06);
+        }
         .gif-card.highlight { border: 3px solid #ffffff; box-shadow: 0 0 0 2px rgba(255,255,255,0.12) inset; }
         .carousel-ctrl { display: flex; justify-content: center; align-items: center; gap: 14px; margin-top: 8px; }
         .carousel-ctrl .stButton>button { font-weight: 700; padding: 8px 16px; }
@@ -129,15 +186,15 @@ def inject_base_styles() -> None:
 
         /* Soft edge fade and transparency for logos */
         .splash-logo {
-            width: 70vw;
-            max-width: 1600px;
-            opacity: 0.8;
-            /* Deeper, softer fade */
-            -webkit-mask-image: radial-gradient(circle at 50% 50%, rgba(0,0,0,1) 35%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0.25) 80%, rgba(0,0,0,0) 100%);
-                    mask-image: radial-gradient(circle at 50% 50%, rgba(0,0,0,1) 35%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0.25) 80%, rgba(0,0,0,0) 100%);
+            width: 100vw; /* fill available screen width */
+            max-width: 100%;
+            opacity: 0.85;
+            /* Stronger, deeper fade with emphasis on top/bottom */
+            -webkit-mask-image: radial-gradient(ellipse at 50% 50%, rgba(0,0,0,1) 24%, rgba(0,0,0,0.35) 55%, rgba(0,0,0,0.12) 78%, rgba(0,0,0,0) 100%);
+                    mask-image: radial-gradient(ellipse at 50% 50%, rgba(0,0,0,1) 24%, rgba(0,0,0,0.35) 55%, rgba(0,0,0,0.12) 78%, rgba(0,0,0,0) 100%);
         }
         .banner-logo {
-            max-height: 192px;
+            max-height: 173px; /* ~90% of previous */
             opacity: 0.85;
             -webkit-mask-image: radial-gradient(circle at 50% 50%, rgba(0,0,0,1) 50%, rgba(0,0,0,0.45) 75%, rgba(0,0,0,0.18) 90%, rgba(0,0,0,0) 100%);
                     mask-image: radial-gradient(circle at 50% 50%, rgba(0,0,0,1) 50%, rgba(0,0,0,0.45) 75%, rgba(0,0,0,0.18) 90%, rgba(0,0,0,0) 100%);
@@ -159,8 +216,8 @@ def show_splash(logo_path: Path, duration_seconds: float = 10.0) -> None:
             img_src = ""
         st.markdown(
             f"""
-            <div class='center' style='height: 90vh; background-color: #060F25;'>
-              <img class="splash-logo" src="{img_src}" alt="PerceptionLab" />
+            <div style="position:fixed; inset:0; background-color:#060F25; padding:0; margin:0; width:100vw; height:100vh; overflow:hidden; z-index: 9999;">
+              <img class="splash-logo" src="{img_src}" alt="PerceptionLab" style="display:block; width:100%; height:auto; margin:0;"/>
             </div>
             """,
             unsafe_allow_html=True,
@@ -207,7 +264,7 @@ def main() -> None:
 
     logo_path = get_logo_path()
     if not st.session_state.get("splash_done", False):
-        show_splash(logo_path)
+        show_splash(get_splash_logo_path())
         st.session_state["splash_done"] = True
         st.rerun()
 
@@ -274,7 +331,7 @@ def main() -> None:
     )
 
     with tab_run:
-        # Carousel: one scenario card at a time with arrows
+        # Scenarios: Gallery → Focus flow
         assets_dir = Path(__file__).resolve().parents[1] / "assets"
         scenarios = [
             {"gif": "day.gif", "mp4": "data/samples/day.mp4", "name": "day.gif", "desc": "Day — Urban signage: Daylight urban, clear signs."},
@@ -286,6 +343,8 @@ def main() -> None:
         ]
         st.session_state.setdefault("scenario_idx", 0)
         st.session_state.setdefault("video_choice", scenarios[0]["mp4"])
+        st.session_state.setdefault("view_mode", "gallery")  # gallery | focus
+        st.session_state.setdefault("selected_scenario", None)
 
         # Show three cards (Prev | Center | Next)
         n = len(scenarios)
@@ -328,84 +387,326 @@ def main() -> None:
                     st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
 
-        # Outer frame
-        # Center the entire carousel block
-        st.markdown('<div style="display:flex;justify-content:center;">', unsafe_allow_html=True)
-        st.markdown('<div class="carousel-frame">', unsafe_allow_html=True)
-        row_l, row_c, row_r = st.columns([1,1,1], gap="small")
-        with row_l:
-            st.markdown('<div class="carousel-row">', unsafe_allow_html=True)
-        render_card(row_l, left_i, show_prev=True)
-        render_card(row_c, mid, show_select=True, highlight=True)
-        render_card(row_r, right_i, show_next=True)
-        with row_r:
-            st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        if st.session_state.view_mode == "gallery":
+            # Single bordered wrapper via Streamlit form so border encloses cards + buttons
+            with st.form("carousel_form"):
+                import base64 as _b64
+                def _card_html(idx: int, highlight: bool) -> str:
+                    item = scenarios[idx]
+                    gif_path = assets_dir / item["gif"]
+                    if not gif_path.exists():
+                        return ""
+                    b64 = _b64.b64encode(gif_path.read_bytes()).decode("utf-8")
+                    desc_text = str(item.get('desc', ''))
+                    if ' — ' in desc_text:
+                        title, rest = desc_text.split(' — ', 1)
+                    else:
+                        title, rest = desc_text, ''
+                    if ':' in rest:
+                        sub, detail = rest.split(':', 1)
+                    else:
+                        sub, detail = rest, ''
+                    card_cls = "gif-card highlight" if highlight else "gif-card"
+                    return (
+                        f"<div class='{card_cls}' style='margin:0;'>"
+                        f"  <div class='gif-title'>{title.strip()}</div>"
+                        f"  <div class='gif-sub'>{sub.strip()}</div>"
+                        f"  <div class='gif-desc'>{detail.strip()}</div>"
+                        f"  <img src='data:image/gif;base64,{b64}' />"
+                        f"  <div class='gif-fn'>{item['name']}</div>"
+                        f"</div>"
+                    )
 
-        with st.expander("Overlays & thresholds", expanded=True):
+                anim = st.session_state.get("carousel_anim", "")
+                left2 = (mid - 2) % n
+                right2 = (mid + 2) % n
+
+                if anim == "next":
+                    track_class = "carousel-track anim-next"
+                    track_style = ""
+                    track_html = (
+                        _card_html(left_i, False)
+                        + _card_html(mid, False)
+                        + _card_html(right_i, True)
+                        + _card_html(right2, False)
+                    )
+                elif anim == "prev":
+                    track_class = "carousel-track anim-prev"
+                    track_style = "transform: translateX(calc(-1 * var(--cardw)));"
+                    track_html = (
+                        _card_html(left2, False)
+                        + _card_html(left_i, True)
+                        + _card_html(mid, False)
+                        + _card_html(right_i, False)
+                    )
+                else:
+                    track_class = "carousel-track"
+                    track_style = ""
+                    track_html = (
+                        _card_html(left_i, False)
+                        + _card_html(mid, True)
+                        + _card_html(right_i, False)
+                    )
+
+                st.markdown(
+                    f"<div class='carousel-viewport'><div class='{track_class}' style='{track_style}'>{track_html}</div></div>",
+                    unsafe_allow_html=True,
+                )
+
+                # Centered buttons under center card using custom PNG assets as backgrounds
+                btn_left = (assets_dir / "btn-left.png")
+                btn_right = (assets_dir / "btn-right.png")
+                btn_select = (assets_dir / "btn-select.png")
+                try:
+                    b64_left = _b64.b64encode(btn_left.read_bytes()).decode("utf-8") if btn_left.exists() else ""
+                    b64_right = _b64.b64encode(btn_right.read_bytes()).decode("utf-8") if btn_right.exists() else ""
+                    b64_select = _b64.b64encode(btn_select.read_bytes()).decode("utf-8") if btn_select.exists() else ""
+                except Exception:
+                    b64_left = b64_right = b64_select = ""
+                st.markdown(
+                    f"""
+                    <style>
+                    .carousel-btn-row {{ display: flex; justify-content: center; gap: 0; margin: 5px 0; }}
+                    .carousel-btn-row .stButton {{ width: auto !important; display: inline-block; margin: 0; }}
+                    .carousel-btn-row .stButton > button {{
+                        width: calc(var(--cardw)/3); height: 48px;
+                        color: transparent; text-shadow: none; border-radius: 14px;
+                        background-color: #0b1a33; background-repeat: no-repeat; background-position: center; background-size: contain;
+                    }}
+                    .carousel-btn-left .stButton > button {{ background-image: url('data:image/png;base64,{b64_left}'); }}
+                    .carousel-btn-select .stButton > button {{ border: 3px solid #ffffff !important; font-weight: 800; color: #e6fbfe; background-image: none; }}
+                    .carousel-btn-right .stButton > button {{ background-image: url('data:image/png;base64,{b64_right}'); }}
+                    .carousel-btn-row .stButton + .stButton > button {{ margin-left: -1px; }}
+                    </style>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+                sp_l, center_btns, sp_r = st.columns([1, 4, 1])
+                with center_btns:
+                    st.markdown("<div class='carousel-btn-row'>", unsafe_allow_html=True)
+                    cbl, cbs, cbr = st.columns([1,1,1])
+                    with cbl:
+                        st.markdown("<div class='carousel-btn-left'>", unsafe_allow_html=True)
+                        prev_clicked = st.form_submit_button("< PREV", use_container_width=False)
+                        st.markdown("</div>", unsafe_allow_html=True)
+                    with cbs:
+                        st.markdown("<div class='carousel-btn-select'>", unsafe_allow_html=True)
+                        select_clicked = st.form_submit_button("SELECT", use_container_width=False)
+                        st.markdown("</div>", unsafe_allow_html=True)
+                    with cbr:
+                        st.markdown("<div class='carousel-btn-right'>", unsafe_allow_html=True)
+                        next_clicked = st.form_submit_button("NEXT >", use_container_width=False)
+                        st.markdown("</div>", unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
+            if prev_clicked:
+                st.session_state["carousel_anim"] = "prev"
+                st.session_state["scenario_idx"] = (mid - 1) % n
+            if select_clicked:
+                st.session_state["video_choice"] = scenarios[mid]["mp4"]
+                st.session_state["selected_scenario"] = scenarios[mid]
+                st.session_state["view_mode"] = "focus"
+
+            # Clear anim flag after render so next draw is stable
+            if st.session_state.get("carousel_anim"):
+                st.session_state["carousel_anim"] = ""
+
+            # Stop further rendering in gallery mode to prevent stray sections
+            st.stop()
+
+        else:
+            # Focus mode: selected preview on the right, tools on the left
+            sel = st.session_state.get("selected_scenario")
+            left, right = st.columns([7,5])
+            with right:
+                try:
+                    import base64 as _b64
+                    gif_b64 = _b64.b64encode((assets_dir / sel["gif"]).read_bytes()).decode("utf-8") if sel else ""
+                except Exception:
+                    gif_b64 = ""
+                if gif_b64:
+                    st.image(f"data:image/gif;base64,{gif_b64}", use_column_width=True, caption=sel.get("desc",""))
+                if st.button("Back to gallery", type="secondary", use_container_width=True):
+                    st.session_state.update(view_mode="gallery", selected_scenario=None, carousel_anim="")
+                    st.rerun()
+
+            with left:
+                st.markdown("### Overlays & thresholds")
+                # Reuse the existing controls below in a compact layout
+                with st.expander("Overlays & thresholds", expanded=True):
+                    ol1, ol2, ol3, ol4 = st.columns([1, 1, 1, 2])
+                    with ol1:
+                        show_boxes = st.checkbox("Boxes", value=True, key="ov_boxes_gallery")
+                    with ol2:
+                        show_tracks = st.checkbox("Tracks", value=True, key="ov_tracks_gallery")
+                    with ol3:
+                        show_ocr = st.checkbox("OCR", value=True, key="ov_ocr_gallery")
+                    with ol4:
+                        profile = st.radio(
+                            "",
+                            options=["realtime", "accuracy"],
+                            horizontal=True,
+                            index=0,
+                            label_visibility="collapsed",
+                            key="profile_mode_gallery",
+                        )
+                    mask_opacity = st.slider("Mask opacity", 0.0, 1.0, 0.35, 0.05, help="Transparency of segmentation overlays", key="mask_opacity_gallery")
+                    colt1, colt2 = st.columns(2)
+                    with colt1:
+                        conf_thresh = st.slider("Confidence", 0.05, 0.95, 0.35, 0.05, key="conf_thresh_gallery")
+                    with colt2:
+                        nms_iou = st.slider("NMS IoU", 0.05, 0.95, 0.5, 0.05, key="nms_iou_gallery")
+                    class_filter = st.text_input("Class include (comma-separated)", value="", help="Limit overlays to these classes", key="class_filter_gallery")
+
+                st.markdown("### Telemetry")
+                st.markdown('<div class="sticky-hud">', unsafe_allow_html=True)
+                fps_placeholder = st.empty()
+                hud_bar = st.empty()
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                st.caption("WebSocket stream (stub) will print events below.")
+                log_box = st.empty()
+
+                # Existing WS runner kept as-is (invocation omitted here)
+                video = st.session_state.get("video_choice", scenarios[0]["mp4"])
+                api_base = st.session_state.api_base
+                def _run_ws():
+                    try:
+                        from websocket import create_connection
+                    except Exception as e:  # dependency missing
+                        log_box.warning(f"websocket-client not installed: {e}")
+                        return
+                    try:
+                        qs = urlencode({"video_path": video, "profile": profile})
+                        ws = create_connection(f"{api_base.replace('http', 'ws')}/ws/run_video?{qs}")
+                        messages = []
+                        while True:
+                            msg = ws.recv()
+                            if not msg:
+                                break
+                            try:
+                                ev = _json.loads(msg)
+                                messages.append(ev)
+                                if ev.get("fps"):
+                                    fps_placeholder.metric("FPS", f"{ev['fps']:.1f}")
+                                t = ev.get("timings", {})
+                                hud_bar.write(f"pre: {t.get('pre',0)} ms | model: {t.get('model',0)} ms | post: {t.get('post',0)} ms")
+                            except Exception:
+                                messages.append({"raw": msg})
+                            # show only last few
+                            log_box.json(messages[-5:])
+                    except Exception as e:
+                        log_box.warning(f"WS error: {e}")
             ol1, ol2, ol3, ol4 = st.columns([1, 1, 1, 2])
             with ol1:
-                show_boxes = st.checkbox("Boxes", value=True)
+                show_boxes = st.checkbox("Boxes", value=True, key="ov_boxes_focus")
             with ol2:
-                show_tracks = st.checkbox("Tracks", value=True)
+                show_tracks = st.checkbox("Tracks", value=True, key="ov_tracks_focus")
             with ol3:
-                show_ocr = st.checkbox("OCR", value=True)
+                show_ocr = st.checkbox("OCR", value=True, key="ov_ocr_focus")
             with ol4:
-                profile = st.radio(
-                    "",
-                    options=["realtime", "accuracy"],
-                    horizontal=True,
-                    index=0,
-                    label_visibility="collapsed",
-                    key="profile_mode",
-                )
-            mask_opacity = st.slider("Mask opacity", 0.0, 1.0, 0.35, 0.05, help="Transparency of segmentation overlays")
+                        profile = st.radio(
+                            "",
+                            options=["realtime", "accuracy"],
+                            horizontal=True,
+                            index=0,
+                            label_visibility="collapsed",
+                            key="profile_mode_focus",
+                        )
+            mask_opacity = st.slider("Mask opacity", 0.0, 1.0, 0.35, 0.05, help="Transparency of segmentation overlays", key="mask_opacity_focus")
             colt1, colt2 = st.columns(2)
             with colt1:
-                conf_thresh = st.slider("Confidence", 0.05, 0.95, 0.35, 0.05)
+                conf_thresh = st.slider("Confidence", 0.05, 0.95, 0.35, 0.05, key="conf_thresh_focus")
             with colt2:
-                nms_iou = st.slider("NMS IoU", 0.05, 0.95, 0.5, 0.05)
-            class_filter = st.text_input("Class include (comma-separated)", value="", help="Limit overlays to these classes")
+                nms_iou = st.slider("NMS IoU", 0.05, 0.95, 0.5, 0.05, key="nms_iou_focus")
+            class_filter = st.text_input("Class include (comma-separated)", value="", help="Limit overlays to these classes", key="class_filter_focus")
 
-        st.markdown("### Telemetry")
-        st.markdown('<div class="sticky-hud">', unsafe_allow_html=True)
-        fps_placeholder = st.empty()
-        hud_bar = st.empty()
-        st.markdown('</div>', unsafe_allow_html=True)
+        # Stop after focus view to avoid rendering unrelated sections
+        st.stop()
 
-        st.caption("WebSocket stream (stub) will print events below.")
-        log_box = st.empty()
+        # Auto-start behavior removed
 
-        def _run_ws():
-            try:
-                from websocket import create_connection
-            except Exception as e:  # dependency missing
-                log_box.warning(f"websocket-client not installed: {e}")
-                return
-            try:
-                qs = urlencode({"video_path": video, "profile": profile})
-                ws = create_connection(f"{api_base.replace('http', 'ws')}/ws/run_video?{qs}")
-                messages = []
-                while True:
-                    msg = ws.recv()
-                    if not msg:
-                        break
+        # Render Quick actions + image utilities ONLY in focus mode
+        if st.session_state.view_mode == "focus":
+            st.markdown("---")
+            st.subheader("Quick actions")
+            colq1, colq2 = st.columns(2)
+            with colq1:
+                if st.button("Show last annotated frame"):
                     try:
-                        ev = _json.loads(msg)
-                        messages.append(ev)
-                        if ev.get("fps"):
-                            fps_placeholder.metric("FPS", f"{ev['fps']:.1f}")
-                        t = ev.get("timings", {})
-                        hud_bar.write(f"pre: {t.get('pre',0)} ms | model: {t.get('model',0)} ms | post: {t.get('post',0)} ms")
-                    except Exception:
-                        messages.append({"raw": msg})
-                    # show only last few
-                    log_box.json(messages[-5:])
-            except Exception as e:
-                log_box.warning(f"WS error: {e}")
+                        last = requests.get(f"{api_base}/last_event", timeout=8).json()
+                        evt = last.get("event") or {}
+                        meta_col, img_col = st.columns([1, 2])
+                        with meta_col:
+                            st.caption("Timings (ms)")
+                            st.json(evt.get("timings", {}))
+                            st.caption("Provider")
+                            st.json(evt.get("provider_provenance", {}))
+                        with img_col:
+                            if evt.get("annotated_b64"):
+                                st.image(evt["annotated_b64"], caption="Last annotated", use_column_width=True)
+                            else:
+                                st.info("No annotated image found.")
+                    except Exception as e:
+                        st.warning(f"Failed to load last annotated frame: {e}")
+            with colq2:
+                if st.button("Interview Mode (2 min)"):
+                    st.info("Guided walkthrough placeholder.")
 
-        # Auto-start behavior removed per request to simplify controls
+            st.markdown("---")
+            st.subheader("Single-frame detection test")
+            uploaded = st.file_uploader("Upload image (jpg/png)", type=["jpg","jpeg","png"])
+            with st.expander("Provider override (optional)"):
+                det_provider = st.radio("Detection provider", ["default","replicate","hf","roboflow"], horizontal=True, index=0)
+                det_model = st.text_input("Detector model/version (provider-specific)", value="ultralytics/yolov8")
+                ocr_provider = st.radio("OCR provider", ["default","replicate","gcv","azure","textract"], horizontal=True, index=0)
+                ocr_version = st.text_input("OCR version (Replicate PaddleOCR)", value="")
+            if uploaded and st.button("Run /run_frame"):
+                import base64
+                img_b64 = base64.b64encode(uploaded.read()).decode("utf-8")
+                try:
+                    with st.spinner("Running /run_frame..."):
+                        override = None
+                        if det_provider != "default":
+                            override = {"detection": {"provider": det_provider, "model": det_model}}
+                        if ocr_provider != "default":
+                            override = override or {}
+                            override.update({"ocr": {"provider": ocr_provider}})
+                            if ocr_provider == "replicate" and ocr_version:
+                                override["ocr"]["version"] = ocr_version
+                        overlay_opts = {
+                            "class_include": [c.strip() for c in class_filter.split(",") if c.strip()],
+                            "mask_opacity": mask_opacity,
+                            "conf_thresh": conf_thresh,
+                            "nms_iou": nms_iou,
+                            "show_boxes": show_boxes,
+                            "show_tracks": show_tracks,
+                            "show_ocr": show_ocr,
+                        }
+                        payload = {"image_b64": img_b64, "profile": profile, "provider_override": override, "overlay_opts": overlay_opts}
+                        resp = requests.post(f"{api_base}/run_frame", json=payload, timeout=30)
+                    data = resp.json()
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        st.caption("Response JSON")
+                        st.json(data)
+                        if data.get("ocr"):
+                            st.caption("OCR")
+                            st.write(", ".join([o.get("text", "") for o in data.get("ocr", [])]))
+                    with col_b:
+                        if data.get("annotated_b64"):
+                            st.caption("Annotated")
+                            st.image(data["annotated_b64"], caption="Overlay", use_column_width=True)
+                        else:
+                            st.info("No annotated image returned.")
+                except Exception as e:
+                    st.warning(f"/run_frame failed: {e}")
+
+            st.markdown("---")
+            st.subheader("Realtime vs Accuracy (single image)")
+            uploaded_cmp = st.file_uploader("Upload image for compare", type=["jpg","jpeg","png"], key="cmp")
+            if uploaded_cmp and st.button("Compare profiles"):
+                st.info("Profile compare placeholder.")
 
         st.markdown("---")
         st.subheader("Quick actions")
