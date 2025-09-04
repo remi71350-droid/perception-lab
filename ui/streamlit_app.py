@@ -9,6 +9,8 @@ import requests
 import threading
 import json as _json
 from urllib.parse import urlencode
+from app.services.client import HttpClient
+from app.services.offline_client import OfflineClient
 
 
 def get_logo_path() -> Path:
@@ -272,7 +274,7 @@ def main() -> None:
 
     def _ping_api(base: str) -> bool:
         try:
-            r = requests.get(f"{base}/health", timeout=2)
+            r = requests.get(f"{base}/health", timeout=0.2)
             return r.ok
         except Exception:
             return False
@@ -285,8 +287,15 @@ def main() -> None:
 
     render_top_banner(logo_path)
 
-    # Connection badge row (small)
+    # Offline mode detection
+    offline_env = os.getenv("PERCEPTION_OFFLINE", "").strip()
+    offline = offline_env not in ("", "0", "false", "False")
     _ok = _ping_api(st.session_state.api_base)
+    if offline or not _ok:
+        st.session_state.offline = True
+        _ok = True  # treat as connected for UX
+    else:
+        st.session_state.offline = False
     _badge = "🟢 Connected" if _ok else "🔴 Offline"
     st.markdown(
         f"""
@@ -344,6 +353,9 @@ def main() -> None:
     tab_run, tab_eval, tab_metrics, tab_reports, tab_fusion, tab_use_cases = st.tabs(
         ["Scenarios", "Evaluate", "Metrics", "Reports", "Fusion", "Use Cases"]
     )
+
+    # Initialize client
+    client = OfflineClient() if st.session_state.get("offline") else HttpClient(st.session_state.api_base)
 
     with tab_run:
         # Scenarios: Gallery → Focus flow
@@ -593,7 +605,7 @@ def main() -> None:
                                     "mask_opacity": st.session_state.get("mask_opacity_focus", 0.35),
                                     "include": st.session_state.get("class_filter_focus", ""),
                                 }
-                                requests.post(f"{st.session_state.api_base}/run_video", json={"video_path": mp4, "profile": profile, "duration_s": 10, "emit_video": False, "overlays": overlays, "thresholds": thresholds}, timeout=120)
+                                client.run_video(mp4, profile, duration_s=10, emit_video=False, overlays=overlays, thresholds=thresholds)
                                 st.toast("Finished.", icon="✅")
                             except Exception as e:
                                 st.warning(f"Run failed: {e}")
@@ -603,7 +615,7 @@ def main() -> None:
                 with a2:
                     if st.button("Compare this frame", use_container_width=True, disabled=disabled_common):
                         try:
-                            requests.post(f"{st.session_state.api_base}/ab_compare", json={"video_path": mp4}, timeout=60)
+                            client.ab_compare(mp4)
                             st.session_state["show_ab"] = True
                             st.session_state["has_run"] = True
                             st.toast("Compare images ready.", icon="🌓")
@@ -612,14 +624,14 @@ def main() -> None:
                 with a3:
                     if st.button("Stop run", use_container_width=True, disabled=running or (not _ok)):
                         try:
-                            requests.post(f"{st.session_state.api_base}/run_control", json={"action":"stop"}, timeout=10)
+                            client.run_control("stop")
                             st.toast("Stopped.", icon="⏹️")
                         except Exception as e:
                             st.warning(f"Stop failed: {e}")
                 with a4:
                     if st.button("Clear results", use_container_width=True, disabled=not _ok):
                         try:
-                            requests.post(f"{st.session_state.api_base}/clear", timeout=10)
+                            client.clear()
                         except Exception:
                             pass
                         st.session_state["show_ab"] = False
