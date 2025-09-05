@@ -10,6 +10,9 @@ jobs:
           python-version: '3.11'
       - run: pip install -r requirements.txt
       - run: pip install ruff mypy pytest
+      - run: pip install -e . || true
       - run: ruff check .
       - run: mypy app
       - run: pytest -q
+      - name: Offline assets presence check
+        run: python scripts/check_offline_assets.py

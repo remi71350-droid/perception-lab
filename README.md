@@ -264,8 +264,12 @@ Generate `runs/<id>/report.pdf`. The report includes a pipeline diagram, provena
 **Fusion tab**  
 Visualize a single KITTI frame with LiDAR points projected onto the RGB image.
 
-**Interview mode**  
-A 2‑minute sequence that: runs realtime briefly, prompts a realtime vs accuracy comparison, surfaces telemetry, and generates a PDF for the latest run with success toasts.
+### User workflow (2-minute walkthrough)
+
+1. Open the Scenarios tab and select a clip. The workspace (popout) opens with the preview on the right.
+2. Pick an operating mode (realtime or accuracy). Run 10s to capture overlays and telemetry.
+3. Click Compare this frame to reveal the A/B slider; drag to compare profiles. Compute metrics to see averages and 95th percentiles.
+4. Generate report (PDF) to save a compact summary with metrics, latency plots, and frames. Artifacts appear under `runs/latest/`.
 
 ---
 
@@ -391,9 +395,9 @@ A GitHub Actions workflow runs lint, type checks, and unit tests on push and pul
 
 ---
 
-## Interview mode (turnkey walkthrough)
+## Guided walkthrough (optional)
 
-Click “Interview Mode” in the Run tab. The sequence loads the curated clip, runs realtime for a few seconds, prompts a realtime vs accuracy comparison, opens telemetry, and builds the PDF. On‑screen captions announce each step; the flow is resilient to transient provider delays.
+An optional guided button performs a short, resilient sequence: run realtime briefly, compare profiles on one frame, surface telemetry, compute metrics, and build the PDF. On‑screen captions announce each step.
 
 ---
 

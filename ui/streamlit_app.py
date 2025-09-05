@@ -733,6 +733,7 @@ def main() -> None:
                             from pathlib import Path as _P
                             evp = _P("runs/latest/events.jsonl")
                             frames = 0; fps_acc=0.0; pre=0.0; model=0.0; post=0.0
+                            fps_list=[]; pre_list=[]; model_list=[]; post_list=[]
                             if evp.exists():
                                 with evp.open("r", encoding="utf-8") as fh:
                                     for line in fh:
@@ -743,14 +744,27 @@ def main() -> None:
                                             pre += float(ev.get("pre_ms") or 0)
                                             model += float(ev.get("model_ms") or 0)
                                             post += float(ev.get("post_ms") or 0)
+                                            fps_list.append(float(ev.get("fps") or 0))
+                                            pre_list.append(float(ev.get("pre_ms") or 0))
+                                            model_list.append(float(ev.get("model_ms") or 0))
+                                            post_list.append(float(ev.get("post_ms") or 0))
                                         except Exception:
                                             continue
+                            def p95(vals):
+                                vals = sorted(vals)
+                                if not vals: return 0.0
+                                k = int(0.95*(len(vals)-1))
+                                return round(vals[k],2)
                             metrics = {
                                 "frames": frames,
                                 "avg_fps": round((fps_acc/frames) if frames else 0, 2),
                                 "avg_pre_ms": round((pre/frames) if frames else 0, 2),
                                 "avg_model_ms": round((model/frames) if frames else 0, 2),
                                 "avg_post_ms": round((post/frames) if frames else 0, 2),
+                                "p95_fps": p95(fps_list),
+                                "p95_pre_ms": p95(pre_list),
+                                "p95_model_ms": p95(model_list),
+                                "p95_post_ms": p95(post_list),
                             }
                             _P("runs/latest").mkdir(parents=True, exist_ok=True)
                             with _P("runs/latest/metrics.json").open("w", encoding="utf-8") as fh:
@@ -759,8 +773,9 @@ def main() -> None:
                             # Inline metrics card
                             st.markdown("<div class='card'>", unsafe_allow_html=True)
                             st.markdown(f"**Frames**: {metrics['frames']}  ")
-                            st.markdown(f"**FPS (avg)**: {metrics['avg_fps']}  ")
+                            st.markdown(f"**FPS (avg/95p)**: {metrics['avg_fps']} / {metrics['p95_fps']}  ")
                             st.markdown(f"**Latency avg (ms)**: pre {metrics['avg_pre_ms']} | model {metrics['avg_model_ms']} | post {metrics['avg_post_ms']}")
+                            st.markdown(f"**Latency 95p (ms)**: pre {metrics['p95_pre_ms']} | model {metrics['p95_model_ms']} | post {metrics['p95_post_ms']}")
                             st.markdown("</div>", unsafe_allow_html=True)
                             st.caption("View full metrics → Metrics tab | Export: runs/latest/metrics.json")
                         except Exception as e:
@@ -853,7 +868,7 @@ def main() -> None:
                                 st.warning(f"Save failed: {e}")
                         st.caption("Realtime (left) — Accuracy (right)")
                     except Exception:
-                        st.info("Install streamlit-image-comparison for slider.")
+                        st.info("A/B slider requires 'streamlit-image-comparison'. Install: pip install streamlit-image-comparison")
                 else:
                     st.caption("Click 'Compare this frame' to populate.")
 
@@ -956,7 +971,7 @@ def main() -> None:
                     """,
                     unsafe_allow_html=True,
                 )
-                # Hidden Bookmark button for keyboard 'b' to append a bookmark
+                # Hidden Bookmark button for keyboard 'b' to append a bookmark; list bookmarks
                 if st.button("Bookmark frame", key="__bookmark_btn__"):
                     try:
                         import json as _json
@@ -973,6 +988,23 @@ def main() -> None:
                         st.toast("Bookmarked.", icon="🔖")
                     except Exception as e:
                         st.warning(f"Bookmark failed: {e}")
+                # Render bookmark list
+                try:
+                    from pathlib import Path as _P
+                    import json as _json
+                    bp = _P("runs/latest/bookmarks.json")
+                    if bp.exists():
+                        st.markdown("#### Bookmarks")
+                        arr = _json.loads(bp.read_text(encoding="utf-8"))
+                        for bmk in arr[-5:][::-1]:
+                            cols = st.columns([3,1])
+                            with cols[0]:
+                                st.caption(f"Frame {bmk.get('frame_id')} — {Path((bmk.get('scenario') or '')).name}")
+                            with cols[1]:
+                                if st.button("Copy", key=f"bk_copy_{bmk.get('ts')}"):
+                                    st.info(str(bp))
+                except Exception:
+                    pass
 
                 # Note: Single-image tools have been removed from the focus view per requirements.
 
