@@ -271,6 +271,12 @@ Visualize a single KITTI frame with LiDAR points projected onto the RGB image.
 3. Click Compare this frame to reveal the A/B slider; drag to compare profiles. Compute metrics to see averages and 95th percentiles.
 4. Generate report (PDF) to save a compact summary with metrics, latency plots, and frames. Artifacts appear under `runs/latest/`.
 
+<p>
+  <img src="assets/screenshot-popout-1.png" alt="Workspace preview" width="600"/>
+  <br/>
+  <img src="assets/screenshot-popout-2.png" alt="A/B comparison and metrics" width="600"/>
+</p>
+
 ---
 
 ## Agentic workflow

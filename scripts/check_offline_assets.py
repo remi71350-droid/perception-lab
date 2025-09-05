@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+import os
 
 
 SCENARIOS = [
@@ -38,8 +39,13 @@ REQUIRED = [
 
 
 def main() -> int:
-    root = Path(__file__).resolve().parents[1]
-    offline_root = root / "offline"
+    # Allow CI/tests to override the project root via OFFLINE_ROOT
+    override = os.getenv("OFFLINE_ROOT")
+    if override:
+        offline_root = Path(override)
+    else:
+        root = Path(__file__).resolve().parents[1]
+        offline_root = root / "offline"
     missing: list[str] = []
 
     for scenario in SCENARIOS:

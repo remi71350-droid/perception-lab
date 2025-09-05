@@ -997,10 +997,22 @@ def main() -> None:
                         st.markdown("#### Bookmarks")
                         arr = _json.loads(bp.read_text(encoding="utf-8"))
                         for bmk in arr[-5:][::-1]:
-                            cols = st.columns([3,1])
+                            cols = st.columns([3,1,1])
                             with cols[0]:
                                 st.caption(f"Frame {bmk.get('frame_id')} — {Path((bmk.get('scenario') or '')).name}")
                             with cols[1]:
+                                if st.button("Open frame", key=f"bk_open_{bmk.get('ts')}"):
+                                    try:
+                                        from pathlib import Path as _P
+                                        # Prefer last_frame if present
+                                        lf = _P("runs/latest/last_frame.png")
+                                        if lf.exists():
+                                            st.image(str(lf), caption="Last frame")
+                                        else:
+                                            st.info("No last_frame.png yet.")
+                                    except Exception as _e:
+                                        st.warning(f"Open failed: {_e}")
+                            with cols[2]:
                                 if st.button("Copy", key=f"bk_copy_{bmk.get('ts')}"):
                                     st.info(str(bp))
                 except Exception:
