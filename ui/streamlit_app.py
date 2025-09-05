@@ -312,11 +312,19 @@ def main() -> None:
     else:
         st.session_state.offline = False
     _badge = "🟢 Connected" if _ok else "🔴 Offline"
+    # Providers readiness badge
+    prov_ok = False
+    try:
+        pr = requests.get(f"{st.session_state.api_base}/health/providers", timeout=1.5)
+        if pr.ok:
+            prov = (pr.json() or {}).get("providers", {})
+            prov_ok = bool(prov) and all(bool(v) for v in prov.values())
+    except Exception:
+        prov_ok = False
+    _prov_badge = "🟢 Providers" if prov_ok else "🟠 Providers"
     st.markdown(
         f"""
-        <div style=\"position:fixed; top:8px; right:12px; z-index:1000; font-size:12px; opacity:.95; background:rgba(6,14,38,0.6); padding:4px 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.15);\">
-          <span>{_badge}</span>
-        </div>
+        <div style=\"position:fixed; top:8px; right:12px; z-index:1000; font-size:12px; opacity:.95; background:rgba(6,14,38,0.6); padding:4px 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.15);\">\n          <span>{_badge}</span>\n        </div>\n        <div style=\"position:fixed; top:34px; right:12px; z-index:1000; font-size:12px; opacity:.95; background:rgba(6,14,38,0.6); padding:4px 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.15);\">\n          <span title=\"Provider tokens/endpoints configured\">{_prov_badge}</span>\n        </div>
         """,
         unsafe_allow_html=True,
     )
