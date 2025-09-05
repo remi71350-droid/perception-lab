@@ -223,6 +223,8 @@ def inject_base_styles() -> None:
         .step { padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14); font-size: 12px; color:#cfeaf0; background: rgba(255,255,255,0.04); }
         .step.active { color: #01232a; background: var(--aqua); border-color: rgba(2,171,193,0.65); font-weight: 700; }
         .stepper-hint { font-size: 12px; color:#9fc7ce; margin-bottom: 6px; }
+        /* Focus outlines for accessibility */
+        .stButton>button:focus-visible { outline: 2px solid #02ABC1 !important; box-shadow: 0 0 0 3px rgba(2,171,193,0.35) !important; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -507,6 +509,13 @@ def main() -> None:
                         has_artifacts = True
                         break
             st.session_state["has_artifacts"] = has_artifacts
+            # Determine current step (1..4)
+            ab_comp = (runs_dir/"ab_composite.png").exists() if runs_dir.exists() else False
+            report_exists = (runs_dir/"report.pdf").exists() if runs_dir.exists() else False
+            curr_step = 1
+            if st.session_state.get("has_run"): curr_step = 2
+            if st.session_state.get("show_ab"): curr_step = 3
+            if report_exists or ab_comp or has_artifacts: curr_step = 4
             left, right = st.columns([7,5])
 
             # Header (full-width above columns)
@@ -582,14 +591,17 @@ def main() -> None:
 
             with left:
                 # Stepper
-                s1, s2, s3, s4 = st.columns([1.2,1.2,1.2,1.2])
-                st.markdown("<div class='stepper'>" 
-                            f"<div class='step {'active' if True else ''}'>1 Select mode</div>"
-                            f"<div class='step {'active' if st.session_state.get('has_run') else ''}'>2 Run</div>"
-                            f"<div class='step {'active' if st.session_state.get('show_ab') else ''}'>3 Compare</div>"
-                            f"<div class='step {'active' if st.session_state.get('has_artifacts') else ''}'>4 Export</div>"
-                            + "</div>", unsafe_allow_html=True)
+                st.markdown(
+                    "<div class='stepper' role='list' aria-label='Workflow steps'>"
+                    + f"<div class='step {'active' if curr_step==1 else ''}' role='listitem' aria-selected='{str(curr_step==1).lower()}'>1 Select mode</div>"
+                    + f"<div class='step {'active' if curr_step==2 else ''}' role='listitem' aria-selected='{str(curr_step==2).lower()}'>2 Run</div>"
+                    + f"<div class='step {'active' if curr_step==3 else ''}' role='listitem' aria-selected='{str(curr_step==3).lower()}'>3 Compare</div>"
+                    + f"<div class='step {'active' if curr_step==4 else ''}' role='listitem' aria-selected='{str(curr_step==4).lower()}'>4 Export</div>"
+                    + "</div>",
+                    unsafe_allow_html=True,
+                )
                 st.markdown("<div class='stepper-hint'>Follow steps left to right.</div>", unsafe_allow_html=True)
+                st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
                 # Mode selector + microcopy
                 profile = st.radio(
@@ -608,6 +620,7 @@ def main() -> None:
                         "confidence_thresh": st.session_state.get("conf_thresh_focus", 0.35),
                         "nms_iou": st.session_state.get("nms_iou_focus", 0.5),
                     })
+                st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
                 # Primary actions row
                 a1, a2, a3, a4 = st.columns([1.2,1.4,1.1,1.1])
@@ -667,6 +680,7 @@ def main() -> None:
                             pass
                         st.session_state["show_ab"] = False
                         st.toast("Cleared.", icon="🧹")
+                st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
                 # P1: quick metrics & report
                 b1, b2 = st.columns([1.2,1.6])
@@ -764,6 +778,7 @@ def main() -> None:
                             st.toast("Re‑run complete.", icon="🔁")
                         except Exception as e:
                             st.warning(f"Re‑run failed: {e}")
+                st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
                 # A/B slider section
                 st.markdown("### Profile compare (single frame)")
