@@ -658,6 +658,16 @@ def main() -> None:
                     label_visibility="collapsed",
                     key="profile_mode_focus",
                 )
+                # Make radio labels smaller and all-caps via CSS
+                st.markdown(
+                    """
+                    <style>
+                    /* target immediate radio labels in this block */
+                    div[role='radiogroup'] label p { text-transform: uppercase; font-size: 12px; }
+                    </style>
+                    """,
+                    unsafe_allow_html=True,
+                )
                 st.caption("Realtime prioritizes throughput. Accuracy prioritizes detail.")
                 # Profile badges (compact, with tooltips)
                 _inp = 640 if profile == "realtime" else 1024
@@ -775,7 +785,7 @@ def main() -> None:
                         except Exception as e:
                             st.warning(f"Stop failed: {e}")
                 with a4:
-                    if has_artifacts and st.button("Clear results", use_container_width=True, help="Remove artifacts and telemetry for a fresh run"):
+                    if has_artifacts and st.button("Clear Results", use_container_width=True, help="Remove artifacts and telemetry for a fresh run"):
                         try:
                             client.clear()
                         except Exception:
