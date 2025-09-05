@@ -224,9 +224,13 @@ def inject_base_styles() -> None:
         .stepper { display:flex; gap:8px; align-items:center; margin: 6px 0 2px 0; }
         .step { padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14); font-size: 12px; color:#cfeaf0; background: rgba(255,255,255,0.04); }
         .step.active { color: #01232a; background: var(--aqua); border-color: rgba(2,171,193,0.65); font-weight: 700; }
+        .step.disabled { opacity: 0.45; filter: grayscale(0.5); }
         .stepper-hint { font-size: 12px; color:#9fc7ce; margin-bottom: 6px; }
         /* Focus outlines for accessibility */
         .stButton>button:focus-visible { outline: 2px solid #02ABC1 !important; box-shadow: 0 0 0 3px rgba(2,171,193,0.35) !important; }
+        /* Simple skeletons */
+        .skeleton { width:100%; height:160px; border-radius:8px; background: linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.12), rgba(255,255,255,0.06)); background-size: 600% 100%; animation: shine 1.2s infinite; }
+        @keyframes shine { 0% { background-position: 0% 0; } 100% { background-position: 100% 0; } }
         </style>
         """,
         unsafe_allow_html=True,
@@ -559,7 +563,18 @@ def main() -> None:
                         f"<img src='data:image/gif;base64,{gif_b64}' alt='{alt}' style='width:100%;height:auto;border-radius:8px' />",
                         unsafe_allow_html=True,
                     )
-                meta = sel.get("meta", "")
+                # Scenario metadata (lighting/env/features)
+                _sname = (sel or {}).get("mp4", "")
+                _stem = Path(_sname).stem if _sname else ""
+                META = {
+                    "day": "lighting: day | env: urban | features: signage",
+                    "night": "lighting: night | env: highway | features: glare",
+                    "rain": "weather: rain | env: roadway | features: low contrast",
+                    "tunnel": "lighting: transition | env: tunnel | features: bright→dark",
+                    "pedestrians": "env: crosswalk | features: pedestrians",
+                    "snow": "weather: snow | env: roadway | features: low contrast",
+                }
+                meta = sel.get("meta", META.get(_stem, ""))
                 if name_text:
                     st.caption(name_text)
                 if meta:
@@ -605,12 +620,13 @@ def main() -> None:
 
             with left:
                 # Stepper
+                disabled_cls = " disabled" if st.session_state.get("is_running") else ""
                 st.markdown(
                     "<div class='stepper' role='list' aria-label='Workflow steps'>"
-                    + f"<div class='step {'active' if curr_step==1 else ''}' role='listitem' aria-selected='{str(curr_step==1).lower()}'>1 Select mode</div>"
-                    + f"<div class='step {'active' if curr_step==2 else ''}' role='listitem' aria-selected='{str(curr_step==2).lower()}'>2 Run</div>"
-                    + f"<div class='step {'active' if curr_step==3 else ''}' role='listitem' aria-selected='{str(curr_step==3).lower()}'>3 Compare</div>"
-                    + f"<div class='step {'active' if curr_step==4 else ''}' role='listitem' aria-selected='{str(curr_step==4).lower()}'>4 Export</div>"
+                    + f"<div class='step {'active' if curr_step==1 else ''}{disabled_cls}' role='listitem' aria-selected='{str(curr_step==1).lower()}'>1 Select mode</div>"
+                    + f"<div class='step {'active' if curr_step==2 else ''}{disabled_cls}' role='listitem' aria-selected='{str(curr_step==2).lower()}'>2 Run</div>"
+                    + f"<div class='step {'active' if curr_step==3 else ''}{disabled_cls}' role='listitem' aria-selected='{str(curr_step==3).lower()}'>3 Compare</div>"
+                    + f"<div class='step {'active' if curr_step==4 else ''}{disabled_cls}' role='listitem' aria-selected='{str(curr_step==4).lower()}'>4 Export</div>"
                     + "</div>",
                     unsafe_allow_html=True,
                 )
@@ -865,7 +881,10 @@ def main() -> None:
                         df = pd.DataFrame(view_rows)[["frame_id","fps","pre_ms","model_ms","post_ms","provider","level"]]
                         st.dataframe(df.tail(100), use_container_width=True, height=240)
                     else:
-                        st.caption("No telemetry yet.")
+                        if st.session_state.get("is_running"):
+                            st.markdown("<div class='skeleton'></div>", unsafe_allow_html=True)
+                        else:
+                            st.caption("No telemetry yet.")
 
                 # Artifacts panel
                 st.markdown("### Artifacts")
@@ -897,7 +916,10 @@ def main() -> None:
                                 st.info(str(report_pdf))
                     st.caption("Artifacts reflect the current mode and overlay settings at capture time.")
                 else:
-                    st.caption("Artifacts appear here after a run or compare.")
+                    if st.session_state.get("is_running"):
+                        st.markdown("<div class='skeleton'></div>", unsafe_allow_html=True)
+                    else:
+                        st.caption("Artifacts appear here after a run or compare.")
 
                 # Inline missing asset warning
                 if not mp4_ok:
@@ -909,15 +931,32 @@ def main() -> None:
                     <script>
                     document.addEventListener('keydown', function(e){
                       const buttons = [...document.querySelectorAll('button')];
-                      function clickByText(t){ const el = buttons.find(b => (b.innerText||'').trim()===t); if(el){ e.preventDefault(); el.click(); }}
+                      function clickByText(t){ const el = buttons.find(b => (b.innerText||'').trim()===t); if(el){ e.preventDefault(); el.click(); return true;} return false; }
                       if(e.code==='Space'){ clickByText('Run 10s'); }
-                      if(e.key==='b' || e.key==='B'){ if(clickByText('Save composite')===undefined){ clickByText('Compare this frame'); } }
+                      if(e.key==='b' || e.key==='B'){ if(!clickByText('Save composite')){ clickByText('Compare this frame'); } }
                       if(e.key==='Escape'){ const el = buttons.find(b => (b.innerText||'').includes('Back to gallery')); if(el){ e.preventDefault(); el.click(); }}
                     });
                     </script>
                     """,
                     unsafe_allow_html=True,
                 )
+                # Hidden Bookmark button for keyboard 'b' to append a bookmark
+                if st.button("Bookmark frame", key="__bookmark_btn__"):
+                    try:
+                        import json as _json
+                        from pathlib import Path as _P
+                        rows = st.session_state.get("telemetry_rows", [])
+                        fid = rows[-1].get("frame_id") if rows else None
+                        bk = {"ts": time.time(), "frame_id": fid, "scenario": (sel or {}).get("mp4")}
+                        p = _P("runs/latest/bookmarks.json")
+                        arr = []
+                        if p.exists():
+                            arr = _json.loads(p.read_text(encoding="utf-8"))
+                        arr.append(bk)
+                        p.write_text(_json.dumps(arr, indent=2), encoding="utf-8")
+                        st.toast("Bookmarked.", icon="🔖")
+                    except Exception as e:
+                        st.warning(f"Bookmark failed: {e}")
 
                 # Note: Single-image tools have been removed from the focus view per requirements.
 
