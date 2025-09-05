@@ -50,6 +50,15 @@ def build_pdf_report(run_dir: Path) -> Path:
             data = base64.b64encode(buf.getvalue()).decode("utf-8")
             hist_data_uri = f"data:image/png;base64,{data}"
 
+    # Include raw profile JSON if present (for auditability)
+    profile_json_block = ""
+    pjson = run_dir / "profile.json"
+    if pjson.exists():
+        try:
+            profile_json_block = f"<h3>Profile (raw JSON)</h3><pre>{pjson.read_text(encoding='utf-8')}</pre>"
+        except Exception:
+            profile_json_block = ""
+
     html = f"""
     <html>
       <head>
@@ -82,6 +91,7 @@ def build_pdf_report(run_dir: Path) -> Path:
         <div class='row'>{img_tags}</div>
         <h2>Latency Histogram</h2>
         {f"<img src='{hist_data_uri}' style='max-width: 60%;'/>" if hist_data_uri else "<p>No events yet.</p>"}
+        {profile_json_block}
       </body>
     </html>
     """

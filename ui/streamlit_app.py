@@ -646,13 +646,29 @@ def main() -> None:
                     key="profile_mode_focus",
                 )
                 st.caption("Realtime prioritizes throughput. Accuracy prioritizes detail.")
-                # Summary expander
-                with st.expander("Profile summary", expanded=False):
-                    st.write({
-                        "input_size": 640 if profile == "realtime" else 1024,
-                        "confidence_thresh": st.session_state.get("conf_thresh_focus", 0.35),
-                        "nms_iou": st.session_state.get("nms_iou_focus", 0.5),
-                    })
+                # Profile badges (compact, with tooltips)
+                _inp = 640 if profile == "realtime" else 1024
+                _conf = float(st.session_state.get("conf_thresh_focus", 0.35))
+                _nms = float(st.session_state.get("nms_iou_focus", 0.5))
+                st.markdown(
+                    f"""
+                    <div style='display:flex;gap:12px;align-items:center;margin:6px 0 0 0;'>
+                      <span title='Input size sent to the perception models' style='font-size:12px;opacity:.9;'>Input {_inp}</span>
+                      <span title='Minimum detection confidence retained' style='font-size:12px;opacity:.9;'>Conf ≥ {(_conf):.2f}</span>
+                      <span title='IoU threshold used to merge overlapping boxes' style='font-size:12px;opacity:.9;'>NMS IoU {(_nms):.2f}</span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                # Advanced details
+                with st.expander("Profile details (advanced)", expanded=False):
+                    st.markdown("- Input size: {}px".format(_inp))
+                    st.markdown("- Confidence threshold: {:.2f}".format(_conf))
+                    st.markdown("- NMS IoU: {:.2f}".format(_nms))
+                    _view_raw = st.checkbox("View raw", value=False, key="view_raw_profile_json")
+                    if _view_raw:
+                        import json as _json
+                        st.code(_json.dumps({"input_size": _inp, "confidence_thresh": _conf, "nms_iou": _nms}, indent=2), language="json")
                 st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
                 # Primary actions row
@@ -681,6 +697,19 @@ def main() -> None:
                                     "mask_opacity": st.session_state.get("mask_opacity_focus", 0.35),
                                     "include": st.session_state.get("class_filter_focus", ""),
                                 }
+                                # Persist a small profile snapshot alongside artifacts for reporting/audit
+                                try:
+                                    from pathlib import Path as _P
+                                    import json as _json
+                                    _snap = {
+                                        "profile": profile,
+                                        "input_size": _inp,
+                                        "thresholds": thresholds,
+                                    }
+                                    _P("runs/latest").mkdir(parents=True, exist_ok=True)
+                                    (_P("runs/latest")/"profile.json").write_text(_json.dumps(_snap, indent=2), encoding="utf-8")
+                                except Exception:
+                                    pass
                                 client.run_video(mp4, profile, duration_s=10, emit_video=False, overlays=overlays, thresholds=thresholds)
                                 st.toast("Finished.", icon="✅")
                             except Exception as e:
@@ -780,7 +809,11 @@ def main() -> None:
                             st.markdown(f"**Latency avg (ms)**: pre {metrics['avg_pre_ms']} | model {metrics['avg_model_ms']} | post {metrics['avg_post_ms']}")
                             st.markdown(f"**Latency 95p (ms)**: pre {metrics['p95_pre_ms']} | model {metrics['p95_model_ms']} | post {metrics['p95_post_ms']}")
                             st.markdown("</div>", unsafe_allow_html=True)
-                            st.caption("View full metrics → Metrics tab | Export: runs/latest/metrics.json")
+                            # Show profile badges summary next to link
+                            _inp = st.session_state.get("last_profile_input", None) or (640 if st.session_state.get("profile_mode_focus","realtime")=="realtime" else 1024)
+                            _conf = float(st.session_state.get("conf_thresh_focus", 0.35))
+                            _nms = float(st.session_state.get("nms_iou_focus", 0.5))
+                            st.caption(f"Input {_inp} · Conf ≥ {_conf:.2f} · NMS IoU {_nms:.2f}  |  View full metrics → Metrics tab  |  Export: runs/latest/metrics.json")
                         except Exception as e:
                             st.warning(f"Scoring failed: {e}")
                 with b2:
