@@ -1220,6 +1220,16 @@ def main() -> None:
 
     with tab_use_cases:
         st.subheader("Use Cases")
+        # Make the use case tab labels smaller to avoid overlap
+        st.markdown(
+            """
+            <style>
+            /* scope to the next tabs block by shrinking labels */
+            section.main div[role='tablist'] button p { font-size: 13px; }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
         uc1, uc2, uc3, uc4, uc5 = st.tabs([
             "Roadway Traffic & Sign Intelligence",
             "Warehouse Safety & PPE",
