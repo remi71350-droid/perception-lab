@@ -36,6 +36,7 @@ app.add_middleware(
 
 registry = RunRegistry()
 metrics = get_metrics_registry()
+_stop_requested: bool = False
 
 
 @app.get("/health")
@@ -183,6 +184,17 @@ def run_video(req: RunVideoRequest) -> JSONResponse:
     return JSONResponse({"status": "accepted", "run_id": run_id, "note": "WS stream TBD"})
 
 
+@app.post("/run_control")
+def run_control(payload: dict) -> dict:
+    """Simple control endpoint; currently supports action=="stop"."""
+    global _stop_requested
+    action = str(payload.get("action", "")).lower()
+    if action == "stop":
+        _stop_requested = True
+        return {"ok": True, "action": action}
+    return {"ok": False, "error": "unsupported action"}
+
+
 @app.post("/evaluate")
 def evaluate(req: EvaluateRequest) -> dict:
     # Call evaluator agent placeholder and persist
@@ -245,9 +257,13 @@ async def ws_run_video(ws: WebSocket) -> None:
         providers = load_providers_config()
         det_cfg = providers.get("detection", {})
         det_model = det_cfg.get("model", "ultralytics/yolov8")
+        global _stop_requested
+        _stop_requested = False
         while True:
             ok, frame = cap.read()
             if not ok:
+                break
+            if _stop_requested:
                 break
             h, w = frame.shape[:2]
             # Encode frame to base64 for provider calls
@@ -289,6 +305,66 @@ async def ws_run_video(ws: WebSocket) -> None:
     finally:
         if cap is not None:
             cap.release()
+
+
+@app.post("/ab_compare")
+def ab_compare(payload: dict) -> dict:
+    """Render a single representative frame in both profiles and save side-by-side assets.
+
+    Writes runs/latest/realtime_frame.png and runs/latest/accuracy_frame.png.
+    """
+    video_path = payload.get("video_path", "data/samples/day.mp4")
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return {"ok": False, "error": f"cannot open video: {video_path}"}
+    # Seek to midpoint frame if possible
+    try:
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
+        if total > 0:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, total // 2)
+    except Exception:
+        pass
+    ok, frame = cap.read()
+    cap.release()
+    if not ok:
+        return {"ok": False, "error": "failed to read frame"}
+    ok2, buf = cv2.imencode(".jpg", frame)
+    if not ok2:
+        return {"ok": False, "error": "encode failure"}
+    b64 = base64.b64encode(buf.tobytes()).decode("utf-8")
+    providers = load_providers_config()
+    det_cfg = providers.get("detection", {})
+    det_model = det_cfg.get("model", "ultralytics/yolov8")
+    # Helper to annotate
+    def _annotate(img_b64: str) -> tuple[list[dict], np.ndarray]:
+        det = ReplicateDetector(det_model)
+        dets = det.infer(img_b64)
+        boxes = [{"x1": d.x1, "y1": d.y1, "x2": d.x2, "y2": d.y2} for d in dets]
+        arr = cv2.imdecode(np.frombuffer(base64.b64decode(img_b64), dtype=np.uint8), cv2.IMREAD_COLOR)
+        vis = draw_boxes(arr, [(b["x1"], b["y1"], b["x2"], b["y2"]) for b in boxes]) if boxes else arr
+        return boxes, vis
+    # Realtime
+    _, vis_rt = _annotate(b64)
+    # Accuracy (same flow for now; in a real setup you would swap models/providers)
+    _, vis_ac = _annotate(b64)
+    out = Path("runs/latest")
+    out.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(out / "realtime_frame.png"), vis_rt)
+    cv2.imwrite(str(out / "accuracy_frame.png"), vis_ac)
+    return {"ok": True}
+
+
+@app.post("/clear")
+def clear() -> dict:
+    """Remove artifacts in runs/latest to reset UI state."""
+    root = Path("runs/latest")
+    if root.exists():
+        for p in root.glob("*"):
+            try:
+                p.unlink()
+            except Exception:
+                pass
+    return {"ok": True}
 
 
 @app.get("/events_snapshot")
