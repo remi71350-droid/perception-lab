@@ -627,20 +627,20 @@ def main() -> None:
                     """
                     <div style='display:flex;gap:14px;align-items:center;flex-wrap:wrap;'>
                       <div style='display:flex;gap:8px;align-items:center;'>
-                        <span style='opacity:.85'>STEP 1:</span>
-                        <button style='font-size:16px;padding:8px 14px;border:1px solid rgba(255,255,255,0.25);border-radius:8px;background:rgba(255,255,255,0.06);color:#cfeaf0;'>SELECT</button>
+                        <span style='opacity:.85;font-size:14px;font-weight:400;'>STEP 1:</span>
+                        <button style='font-size:13px;font-weight:700;padding:5px 10px;border:1px solid rgba(255,255,255,0.25);border-radius:8px;background:rgba(255,255,255,0.06);color:#cfeaf0;'>SELECT</button>
                       </div>
                       <div style='display:flex;gap:8px;align-items:center;'>
-                        <span style='opacity:.85'>STEP 2:</span>
-                        <button style='font-size:16px;padding:8px 14px;border:1px solid rgba(255,255,255,0.25);border-radius:8px;background:rgba(255,255,255,0.06);color:#cfeaf0;'>RUN</button>
+                        <span style='opacity:.85;font-size:14px;font-weight:400;'>STEP 2:</span>
+                        <button style='font-size:13px;font-weight:700;padding:5px 10px;border:1px solid rgba(255,255,255,0.25);border-radius:8px;background:rgba(255,255,255,0.06);color:#cfeaf0;'>RUN</button>
                       </div>
                       <div style='display:flex;gap:8px;align-items:center;'>
-                        <span style='opacity:.85'>STEP 3:</span>
-                        <button style='font-size:16px;padding:8px 14px;border:1px solid rgba(255,255,255,0.25);border-radius:8px;background:rgba(255,255,255,0.06);color:#cfeaf0;'>COMPARE</button>
+                        <span style='opacity:.85;font-size:14px;font-weight:400;'>STEP 3:</span>
+                        <button style='font-size:13px;font-weight:700;padding:5px 10px;border:1px solid rgba(255,255,255,0.25);border-radius:8px;background:rgba(255,255,255,0.06);color:#cfeaf0;'>COMPARE</button>
                       </div>
                       <div style='display:flex;gap:8px;align-items:center;'>
-                        <span style='opacity:.85'>STEP 4:</span>
-                        <button style='font-size:16px;padding:8px 14px;border:1px solid rgba(255,255,255,0.25);border-radius:8px;background:rgba(255,255,255,0.06);color:#cfeaf0;'>EXPORT</button>
+                        <span style='opacity:.85;font-size:14px;font-weight:400;'>STEP 4:</span>
+                        <button style='font-size:13px;font-weight:700;padding:5px 10px;border:1px solid rgba(255,255,255,0.25);border-radius:8px;background:rgba(255,255,255,0.06);color:#cfeaf0;'>EXPORT</button>
                       </div>
                     </div>
                     <div class='stepper-hint' style='margin-top:6px;'>Follow steps left to right.</div>
