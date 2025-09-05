@@ -1017,7 +1017,8 @@ def main() -> None:
                 if st.session_state.get("show_ab") and rt_img.exists() and ac_img.exists():
                     try:
                         from streamlit_image_comparison import image_comparison
-                        image_comparison(img1=str(rt_img), img2=str(ac_img), label1="Realtime", label2="Accuracy", width=700)
+                        # Constrain slider width so it fits within the left column without overlapping
+                        image_comparison(img1=str(rt_img), img2=str(ac_img), label1="Realtime", label2="Accuracy", width=520)
                         if st.button("Save composite"):
                             try:
                                 from PIL import Image as PILImage
