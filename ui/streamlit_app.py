@@ -523,6 +523,9 @@ def main() -> None:
             if st.session_state.get("show_ab"): curr_step = 3
             if report_exists or ab_comp: curr_step = 4
             left, right = st.columns([7,5])
+            # Scenario source path availability for both columns
+            mp4 = (sel or {}).get("mp4")
+            mp4_ok = bool(mp4 and Path(mp4).exists())
 
             # Header (full-width above columns)
             name_text = (sel or {}).get("desc", "")
@@ -593,7 +596,7 @@ def main() -> None:
                 # Buttons under preview
                 btnc1, btnc2 = st.columns([1,1])
                 with btnc1:
-                    if st.button("Open source MP4", use_container_width=True):
+                    if mp4_ok and st.button("Open scenario video", use_container_width=True, help="Open the original input video"):
                         mp4 = (sel or {}).get("mp4")
                         if mp4 and Path(mp4).exists():
                             st.success(f"Source: {mp4}")
@@ -643,17 +646,33 @@ def main() -> None:
                     key="profile_mode_focus",
                 )
                 st.caption("Realtime prioritizes throughput. Accuracy prioritizes detail.")
-                # Summary expander
-                with st.expander("Profile summary", expanded=False):
-                    st.write({
-                        "input_size": 640 if profile == "realtime" else 1024,
-                        "confidence_thresh": st.session_state.get("conf_thresh_focus", 0.35),
-                        "nms_iou": st.session_state.get("nms_iou_focus", 0.5),
-                    })
+                # Profile badges (compact, with tooltips)
+                _inp = 640 if profile == "realtime" else 1024
+                _conf = float(st.session_state.get("conf_thresh_focus", 0.35))
+                _nms = float(st.session_state.get("nms_iou_focus", 0.5))
+                st.markdown(
+                    f"""
+                    <div style='display:flex;gap:12px;align-items:center;margin:6px 0 0 0;'>
+                      <span title='Input size sent to the perception models' style='font-size:12px;opacity:.9;'>Input {_inp}</span>
+                      <span title='Minimum detection confidence retained' style='font-size:12px;opacity:.9;'>Conf ≥ {(_conf):.2f}</span>
+                      <span title='IoU threshold used to merge overlapping boxes' style='font-size:12px;opacity:.9;'>NMS IoU {(_nms):.2f}</span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                # Advanced details
+                with st.expander("Profile details (advanced)", expanded=False):
+                    st.markdown("- Input size: {}px".format(_inp))
+                    st.markdown("- Confidence threshold: {:.2f}".format(_conf))
+                    st.markdown("- NMS IoU: {:.2f}".format(_nms))
+                    _view_raw = st.checkbox("View raw", value=False, key="view_raw_profile_json")
+                    if _view_raw:
+                        import json as _json
+                        st.code(_json.dumps({"input_size": _inp, "confidence_thresh": _conf, "nms_iou": _nms}, indent=2), language="json")
                 st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
                 # Primary actions row
-                a1, a2, a3, a4 = st.columns([1.2,1.4,1.1,1.1])
+                a1, a2, a3, a4 = st.columns([1.2,1.6,1.1,1.1])
                 running = st.session_state.get("_run10s_running", False)
                 mp4 = (sel or {}).get("mp4")
                 mp4_ok = bool(mp4 and Path(mp4).exists())
@@ -678,6 +697,19 @@ def main() -> None:
                                     "mask_opacity": st.session_state.get("mask_opacity_focus", 0.35),
                                     "include": st.session_state.get("class_filter_focus", ""),
                                 }
+                                # Persist a small profile snapshot alongside artifacts for reporting/audit
+                                try:
+                                    from pathlib import Path as _P
+                                    import json as _json
+                                    _snap = {
+                                        "profile": profile,
+                                        "input_size": _inp,
+                                        "thresholds": thresholds,
+                                    }
+                                    _P("runs/latest").mkdir(parents=True, exist_ok=True)
+                                    (_P("runs/latest")/"profile.json").write_text(_json.dumps(_snap, indent=2), encoding="utf-8")
+                                except Exception:
+                                    pass
                                 client.run_video(mp4, profile, duration_s=10, emit_video=False, overlays=overlays, thresholds=thresholds)
                                 st.toast("Finished.", icon="✅")
                             except Exception as e:
@@ -687,14 +719,23 @@ def main() -> None:
                             st.warning("Missing MP4; actions disabled.")
                 with a2:
                     disabled_compare = running or (not _ok) or (not mp4_ok)
-                    if st.button("Compare this frame", help="Grab current frame in both modes and show A/B", use_container_width=True, disabled=disabled_compare):
+                    if st.button("Compare profiles (A/B)", help="Capture the same frame in both profiles and open a slider", use_container_width=True, disabled=disabled_compare):
                         try:
+                            st.toast("Preparing A/B images…", icon="🌓")
                             client.ab_compare(mp4)
                             st.session_state["show_ab"] = True
                             st.session_state["has_run"] = True
                             st.toast("Compare images ready.", icon="🌓")
                         except Exception as e:
                             st.warning(f"Compare failed: {e}")
+                    # Capture frame marker and label
+                    cap1, cap2 = st.columns([1,2])
+                    if cap1.button("Capture frame", help="Mark current frame for compare", use_container_width=True):
+                        st.session_state["compare_frame"] = "midpoint"
+                        st.toast("Frame marked.", icon="📌")
+                    with cap2:
+                        if st.session_state.get("compare_frame"):
+                            st.caption("Frame: midpoint")
                 with a3:
                     if running and st.button("Stop run", use_container_width=True, help="Cancel the active run"):
                         try:
@@ -718,12 +759,13 @@ def main() -> None:
                 # P1: quick metrics & report
                 b1, b2 = st.columns([1.2,1.6])
                 with b1:
-                    if st.button("Score last run", use_container_width=True, disabled=not st.session_state.get("has_run"), help="Compute simple metrics from events.jsonl"):
+                    if st.button("Compute metrics", use_container_width=True, disabled=not st.session_state.get("has_run"), help="Compute simple metrics from events.jsonl"):
                         try:
                             import json as _json
                             from pathlib import Path as _P
                             evp = _P("runs/latest/events.jsonl")
                             frames = 0; fps_acc=0.0; pre=0.0; model=0.0; post=0.0
+                            fps_list=[]; pre_list=[]; model_list=[]; post_list=[]
                             if evp.exists():
                                 with evp.open("r", encoding="utf-8") as fh:
                                     for line in fh:
@@ -734,19 +776,44 @@ def main() -> None:
                                             pre += float(ev.get("pre_ms") or 0)
                                             model += float(ev.get("model_ms") or 0)
                                             post += float(ev.get("post_ms") or 0)
+                                            fps_list.append(float(ev.get("fps") or 0))
+                                            pre_list.append(float(ev.get("pre_ms") or 0))
+                                            model_list.append(float(ev.get("model_ms") or 0))
+                                            post_list.append(float(ev.get("post_ms") or 0))
                                         except Exception:
                                             continue
+                            def p95(vals):
+                                vals = sorted(vals)
+                                if not vals: return 0.0
+                                k = int(0.95*(len(vals)-1))
+                                return round(vals[k],2)
                             metrics = {
                                 "frames": frames,
                                 "avg_fps": round((fps_acc/frames) if frames else 0, 2),
                                 "avg_pre_ms": round((pre/frames) if frames else 0, 2),
                                 "avg_model_ms": round((model/frames) if frames else 0, 2),
                                 "avg_post_ms": round((post/frames) if frames else 0, 2),
+                                "p95_fps": p95(fps_list),
+                                "p95_pre_ms": p95(pre_list),
+                                "p95_model_ms": p95(model_list),
+                                "p95_post_ms": p95(post_list),
                             }
                             _P("runs/latest").mkdir(parents=True, exist_ok=True)
                             with _P("runs/latest/metrics.json").open("w", encoding="utf-8") as fh:
                                 _json.dump(metrics, fh, indent=2)
-                            st.success("Metrics saved to runs/latest/metrics.json")
+                            st.toast("Metrics computed.", icon="📊")
+                            # Inline metrics card
+                            st.markdown("<div class='card'>", unsafe_allow_html=True)
+                            st.markdown(f"**Frames**: {metrics['frames']}  ")
+                            st.markdown(f"**FPS (avg/95p)**: {metrics['avg_fps']} / {metrics['p95_fps']}  ")
+                            st.markdown(f"**Latency avg (ms)**: pre {metrics['avg_pre_ms']} | model {metrics['avg_model_ms']} | post {metrics['avg_post_ms']}")
+                            st.markdown(f"**Latency 95p (ms)**: pre {metrics['p95_pre_ms']} | model {metrics['p95_model_ms']} | post {metrics['p95_post_ms']}")
+                            st.markdown("</div>", unsafe_allow_html=True)
+                            # Show profile badges summary next to link
+                            _inp = st.session_state.get("last_profile_input", None) or (640 if st.session_state.get("profile_mode_focus","realtime")=="realtime" else 1024)
+                            _conf = float(st.session_state.get("conf_thresh_focus", 0.35))
+                            _nms = float(st.session_state.get("nms_iou_focus", 0.5))
+                            st.caption(f"Input {_inp} · Conf ≥ {_conf:.2f} · NMS IoU {_nms:.2f}  |  View full metrics → Metrics tab  |  Export: runs/latest/metrics.json")
                         except Exception as e:
                             st.warning(f"Scoring failed: {e}")
                 with b2:
@@ -763,7 +830,7 @@ def main() -> None:
                                 page.paste(im, (0,160))
                                 out_pdf.parent.mkdir(parents=True, exist_ok=True)
                                 page.save(out_pdf, "PDF", resolution=144)
-                                st.success(f"Report saved: {out_pdf}")
+                                st.toast("Report ready.", icon="📄")
                             else:
                                 st.info("No last_frame.png to include in report.")
                         except Exception as e:
@@ -837,7 +904,7 @@ def main() -> None:
                                 st.warning(f"Save failed: {e}")
                         st.caption("Realtime (left) — Accuracy (right)")
                     except Exception:
-                        st.info("Install streamlit-image-comparison for slider.")
+                        st.info("A/B slider requires 'streamlit-image-comparison'. Install: pip install streamlit-image-comparison")
                 else:
                     st.caption("Click 'Compare this frame' to populate.")
 
@@ -940,7 +1007,7 @@ def main() -> None:
                     """,
                     unsafe_allow_html=True,
                 )
-                # Hidden Bookmark button for keyboard 'b' to append a bookmark
+                # Hidden Bookmark button for keyboard 'b' to append a bookmark; list bookmarks
                 if st.button("Bookmark frame", key="__bookmark_btn__"):
                     try:
                         import json as _json
@@ -957,6 +1024,35 @@ def main() -> None:
                         st.toast("Bookmarked.", icon="🔖")
                     except Exception as e:
                         st.warning(f"Bookmark failed: {e}")
+                # Render bookmark list
+                try:
+                    from pathlib import Path as _P
+                    import json as _json
+                    bp = _P("runs/latest/bookmarks.json")
+                    if bp.exists():
+                        st.markdown("#### Bookmarks")
+                        arr = _json.loads(bp.read_text(encoding="utf-8"))
+                        for bmk in arr[-5:][::-1]:
+                            cols = st.columns([3,1,1])
+                            with cols[0]:
+                                st.caption(f"Frame {bmk.get('frame_id')} — {Path((bmk.get('scenario') or '')).name}")
+                            with cols[1]:
+                                if st.button("Open frame", key=f"bk_open_{bmk.get('ts')}"):
+                                    try:
+                                        from pathlib import Path as _P
+                                        # Prefer last_frame if present
+                                        lf = _P("runs/latest/last_frame.png")
+                                        if lf.exists():
+                                            st.image(str(lf), caption="Last frame")
+                                        else:
+                                            st.info("No last_frame.png yet.")
+                                    except Exception as _e:
+                                        st.warning(f"Open failed: {_e}")
+                            with cols[2]:
+                                if st.button("Copy", key=f"bk_copy_{bmk.get('ts')}"):
+                                    st.info(str(bp))
+                except Exception:
+                    pass
 
                 # Note: Single-image tools have been removed from the focus view per requirements.
 
