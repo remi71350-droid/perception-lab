@@ -44,6 +44,24 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+@app.get("/health/providers")
+def health_providers() -> dict:
+    """Report readiness of cloud providers used by the API for online mode."""
+    ready: dict[str, bool] = {}
+    # Replicate
+    ready["replicate_token"] = bool(os.getenv("REPLICATE_API_TOKEN"))
+    # HF segmentation endpoint
+    ready["hf_api_token"] = bool(os.getenv("HF_API_TOKEN"))
+    ready["hf_seg_endpoint"] = bool(os.getenv("HF_SEG_ENDPOINT"))
+    # OCR version (replicate)
+    try:
+        prov = load_providers_config().get("ocr", {})
+    except Exception:
+        prov = {}
+    ready["replicate_paddleocr_version"] = bool(prov.get("version"))
+    return {"status": "ok", "providers": ready}
+
+
 @app.post("/run_frame")
 def run_frame(req: RunFrameRequest) -> dict:
     # Process a single frame and persist artifacts
