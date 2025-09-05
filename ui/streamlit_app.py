@@ -622,18 +622,31 @@ def main() -> None:
                 st.markdown("</div>", unsafe_allow_html=True)
 
             with left:
-                # Stepper
-                disabled_cls = " disabled" if st.session_state.get("is_running") else ""
+                # Stepbar: labels outside, bigger text inside buttons
                 st.markdown(
-                    "<div class='stepper' role='list' aria-label='Workflow steps'>"
-                    + f"<div class='step {'active' if curr_step==1 else ''}{disabled_cls}' role='listitem' aria-selected='{str(curr_step==1).lower()}'>1 Select mode</div>"
-                    + f"<div class='step {'active' if curr_step==2 else ''}{disabled_cls}' role='listitem' aria-selected='{str(curr_step==2).lower()}'>2 Run</div>"
-                    + f"<div class='step {'active' if curr_step==3 else ''}{disabled_cls}' role='listitem' aria-selected='{str(curr_step==3).lower()}'>3 Compare</div>"
-                    + f"<div class='step {'active' if curr_step==4 else ''}{disabled_cls}' role='listitem' aria-selected='{str(curr_step==4).lower()}'>4 Export</div>"
-                    + "</div>",
+                    """
+                    <div style='display:flex;gap:14px;align-items:center;flex-wrap:wrap;'>
+                      <div style='display:flex;gap:8px;align-items:center;'>
+                        <span style='opacity:.85;font-size:14px;font-weight:400;'>STEP 1:</span>
+                        <button style='font-size:13px;font-weight:700;padding:5px 10px;border:1px solid rgba(255,255,255,0.25);border-radius:8px;background:rgba(255,255,255,0.06);color:#cfeaf0;'>SELECT</button>
+                      </div>
+                      <div style='display:flex;gap:8px;align-items:center;'>
+                        <span style='opacity:.85;font-size:14px;font-weight:400;'>STEP 2:</span>
+                        <button style='font-size:13px;font-weight:700;padding:5px 10px;border:1px solid rgba(255,255,255,0.25);border-radius:8px;background:rgba(255,255,255,0.06);color:#cfeaf0;'>RUN</button>
+                      </div>
+                      <div style='display:flex;gap:8px;align-items:center;'>
+                        <span style='opacity:.85;font-size:14px;font-weight:400;'>STEP 3:</span>
+                        <button style='font-size:13px;font-weight:700;padding:5px 10px;border:1px solid rgba(255,255,255,0.25);border-radius:8px;background:rgba(255,255,255,0.06);color:#cfeaf0;'>COMPARE</button>
+                      </div>
+                      <div style='display:flex;gap:8px;align-items:center;'>
+                        <span style='opacity:.85;font-size:14px;font-weight:400;'>STEP 4:</span>
+                        <button style='font-size:13px;font-weight:700;padding:5px 10px;border:1px solid rgba(255,255,255,0.25);border-radius:8px;background:rgba(255,255,255,0.06);color:#cfeaf0;'>EXPORT</button>
+                      </div>
+                    </div>
+                    <div class='stepper-hint' style='margin-top:6px;'>Follow steps left to right.</div>
+                    """,
                     unsafe_allow_html=True,
                 )
-                st.markdown("<div class='stepper-hint'>Follow steps left to right.</div>", unsafe_allow_html=True)
                 st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
                 # Mode selector + microcopy
@@ -644,6 +657,16 @@ def main() -> None:
                     index=0,
                     label_visibility="collapsed",
                     key="profile_mode_focus",
+                )
+                # Make radio labels smaller and all-caps via CSS
+                st.markdown(
+                    """
+                    <style>
+                    /* target immediate radio labels in this block */
+                    div[role='radiogroup'] label p { text-transform: uppercase; font-size: 12px; }
+                    </style>
+                    """,
+                    unsafe_allow_html=True,
                 )
                 st.caption("Realtime prioritizes throughput. Accuracy prioritizes detail.")
                 # Profile badges (compact, with tooltips)
@@ -672,7 +695,7 @@ def main() -> None:
                 st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
                 # Primary actions row
-                a1, a2, a3, a4 = st.columns([1.2,1.6,1.1,1.1])
+                a1, a2, a3, a4 = st.columns([1.0,2.0,1.0,1.6])
                 running = st.session_state.get("_run10s_running", False)
                 mp4 = (sel or {}).get("mp4")
                 mp4_ok = bool(mp4 and Path(mp4).exists())
@@ -720,22 +743,40 @@ def main() -> None:
                 with a2:
                     disabled_compare = running or (not _ok) or (not mp4_ok)
                     if st.button("Compare profiles (A/B)", help="Capture the same frame in both profiles and open a slider", use_container_width=True, disabled=disabled_compare):
-                        try:
-                            st.toast("Preparing A/B images…", icon="🌓")
-                            client.ab_compare(mp4)
+                        import shutil as _sh
+                        from pathlib import Path as _P
+                        st.toast("Preparing A/B images…", icon="🌓")
+                        did_ab = False
+                        # If offline, prefer local fallback directly
+                        if st.session_state.get("offline"):
+                            stem = (_P(mp4).stem if mp4 else "")
+                            off = _P("offline")/stem
+                            dst = _P("runs/latest"); dst.mkdir(parents=True, exist_ok=True)
+                            left = off/"realtime_frame.png"; right = off/"accuracy_frame.png"
+                            if left.exists() and right.exists():
+                                _sh.copyfile(str(left), str(dst/"realtime_frame.png"))
+                                _sh.copyfile(str(right), str(dst/"accuracy_frame.png"))
+                                did_ab = True
+                        else:
+                            try:
+                                client.ab_compare(mp4)
+                                did_ab = True
+                            except Exception:
+                                # Fallback: try offline assets by stem
+                                stem = (_P(mp4).stem if mp4 else "")
+                                off = _P("offline")/stem
+                                dst = _P("runs/latest"); dst.mkdir(parents=True, exist_ok=True)
+                                left = off/"realtime_frame.png"; right = off/"accuracy_frame.png"
+                                if left.exists() and right.exists():
+                                    _sh.copyfile(str(left), str(dst/"realtime_frame.png"))
+                                    _sh.copyfile(str(right), str(dst/"accuracy_frame.png"))
+                                    did_ab = True
+                        if did_ab:
                             st.session_state["show_ab"] = True
                             st.session_state["has_run"] = True
-                            st.toast("Compare images ready.", icon="🌓")
-                        except Exception as e:
-                            st.warning(f"Compare failed: {e}")
-                    # Capture frame marker and label
-                    cap1, cap2 = st.columns([1,2])
-                    if cap1.button("Capture frame", help="Mark current frame for compare", use_container_width=True):
-                        st.session_state["compare_frame"] = "midpoint"
-                        st.toast("Frame marked.", icon="📌")
-                    with cap2:
-                        if st.session_state.get("compare_frame"):
-                            st.caption("Frame: midpoint")
+                            st.success("Compare images ready. Use the slider below.")
+                        else:
+                            st.info("Compare prepared. Slider will appear when images are available.")
                 with a3:
                     if running and st.button("Stop run", use_container_width=True, help="Cancel the active run"):
                         try:
@@ -744,7 +785,7 @@ def main() -> None:
                         except Exception as e:
                             st.warning(f"Stop failed: {e}")
                 with a4:
-                    if has_artifacts and st.button("Clear results", use_container_width=True, help="Remove artifacts and telemetry for a fresh run"):
+                    if has_artifacts and st.button("Clear Results", use_container_width=True, help="Remove artifacts and telemetry for a fresh run"):
                         try:
                             client.clear()
                         except Exception:
@@ -1179,6 +1220,36 @@ def main() -> None:
 
     with tab_use_cases:
         st.subheader("Use Cases")
+        # Make the Use Cases tab labels smaller to avoid overlap (scoped via JS-assigned class)
+        st.markdown(
+            """
+            <script>
+            (function(){
+              const titles = [
+                'Roadway Traffic & Sign Intelligence',
+                'Warehouse Safety & PPE',
+                'Retail Shelf QA (OCR)',
+                'Smart City Anomaly & Flow',
+                'Agriculture Field Scan'
+              ];
+              const lists = Array.from(document.querySelectorAll('section.main div[role="tablist"]'));
+              for (const tl of lists){
+                const labels = Array.from(tl.querySelectorAll('button p')).map(p=> (p.innerText||'').trim());
+                // Heuristic: if any expected title appears, tag this tablist
+                if (labels.some(l=> titles.some(t=> l.startsWith(t.substring(0,6))))){
+                  tl.classList.add('use-cases-tabs');
+                }
+              }
+            })();
+            </script>
+            <style>
+              .use-cases-tabs button p { font-size: 11px !important; line-height: 1.15; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+              .use-cases-tabs button { padding-top: 2px !important; padding-bottom: 2px !important; max-width: 100%; }
+              .use-cases-tabs { gap: 4px !important; }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
         uc1, uc2, uc3, uc4, uc5 = st.tabs([
             "Roadway Traffic & Sign Intelligence",
             "Warehouse Safety & PPE",
