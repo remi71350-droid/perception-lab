@@ -29,7 +29,10 @@ Thumbs.db
 runs/
 *.zip
 data/samples/*.mp4
+# Track selected showcase GIFs in assets; still use LFS for large binaries
 assets/*.gif
+!assets/pl-ani.gif
+!assets/detect-ani.gif
 .gitattributes
 
 # Node (if we add a web client later)
