@@ -61,6 +61,7 @@ def inject_base_styles() -> None:
         .stButton>button { transition: all 200ms ease-in-out; border-radius: 8px; }
         .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 12px 14px; border-radius: 12px; box-shadow: 0 6px 18px rgba(0,0,0,0.18); }
         .sticky-right { position: sticky; top: 90px; }
+        #preview-pane { position: sticky; top: 90px; }
         .sticky-hud { position: sticky; top: 6px; z-index: 100; background: rgba(6,15,37,0.85); backdrop-filter: blur(4px); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(2,171,193,0.2); }
 
         /* Centering helpers */
@@ -223,6 +224,8 @@ def inject_base_styles() -> None:
         .step { padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14); font-size: 12px; color:#cfeaf0; background: rgba(255,255,255,0.04); }
         .step.active { color: #01232a; background: var(--aqua); border-color: rgba(2,171,193,0.65); font-weight: 700; }
         .stepper-hint { font-size: 12px; color:#9fc7ce; margin-bottom: 6px; }
+        /* Focus outlines for accessibility */
+        .stButton>button:focus-visible { outline: 2px solid #02ABC1 !important; box-shadow: 0 0 0 3px rgba(2,171,193,0.35) !important; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -507,6 +510,13 @@ def main() -> None:
                         has_artifacts = True
                         break
             st.session_state["has_artifacts"] = has_artifacts
+            # Determine current step (1..4)
+            ab_comp = (runs_dir/"ab_composite.png").exists() if runs_dir.exists() else False
+            report_exists = (runs_dir/"report.pdf").exists() if runs_dir.exists() else False
+            curr_step = 1
+            if st.session_state.get("has_run"): curr_step = 2
+            if st.session_state.get("show_ab"): curr_step = 3
+            if report_exists or ab_comp or has_artifacts: curr_step = 4
             left, right = st.columns([7,5])
 
             # Header (full-width above columns)
@@ -533,7 +543,7 @@ def main() -> None:
                 except Exception:
                     gif_b64 = ""
                 # Sticky preview panel
-                st.markdown("<div class='sticky-right card'>", unsafe_allow_html=True)
+                st.markdown("<div id='preview-pane' class='sticky-right card'>", unsafe_allow_html=True)
                 if gif_b64:
                     st.image(f"data:image/gif;base64,{gif_b64}", use_column_width=True)
                 meta = sel.get("meta", "")
@@ -582,14 +592,17 @@ def main() -> None:
 
             with left:
                 # Stepper
-                s1, s2, s3, s4 = st.columns([1.2,1.2,1.2,1.2])
-                st.markdown("<div class='stepper'>" 
-                            f"<div class='step {'active' if True else ''}'>1 Select mode</div>"
-                            f"<div class='step {'active' if st.session_state.get('has_run') else ''}'>2 Run</div>"
-                            f"<div class='step {'active' if st.session_state.get('show_ab') else ''}'>3 Compare</div>"
-                            f"<div class='step {'active' if st.session_state.get('has_artifacts') else ''}'>4 Export</div>"
-                            + "</div>", unsafe_allow_html=True)
+                st.markdown(
+                    "<div class='stepper' role='list' aria-label='Workflow steps'>"
+                    + f"<div class='step {'active' if curr_step==1 else ''}' role='listitem' aria-selected='{str(curr_step==1).lower()}'>1 Select mode</div>"
+                    + f"<div class='step {'active' if curr_step==2 else ''}' role='listitem' aria-selected='{str(curr_step==2).lower()}'>2 Run</div>"
+                    + f"<div class='step {'active' if curr_step==3 else ''}' role='listitem' aria-selected='{str(curr_step==3).lower()}'>3 Compare</div>"
+                    + f"<div class='step {'active' if curr_step==4 else ''}' role='listitem' aria-selected='{str(curr_step==4).lower()}'>4 Export</div>"
+                    + "</div>",
+                    unsafe_allow_html=True,
+                )
                 st.markdown("<div class='stepper-hint'>Follow steps left to right.</div>", unsafe_allow_html=True)
+                st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
                 # Mode selector + microcopy
                 profile = st.radio(
@@ -608,6 +621,7 @@ def main() -> None:
                         "confidence_thresh": st.session_state.get("conf_thresh_focus", 0.35),
                         "nms_iou": st.session_state.get("nms_iou_focus", 0.5),
                     })
+                st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
                 # Primary actions row
                 a1, a2, a3, a4 = st.columns([1.2,1.4,1.1,1.1])
@@ -616,7 +630,7 @@ def main() -> None:
                 mp4_ok = bool(mp4 and Path(mp4).exists())
                 disabled_common = running or (not _ok) or (not mp4_ok)
                 with a1:
-                    if st.button("Run 10s", type="primary", use_container_width=True, disabled=disabled_common):
+                    if st.button("Run 10s", type="primary", use_container_width=True, disabled=disabled_common, help="Process a short segment with current mode and settings"):
                         if mp4_ok:
                             st.session_state["_run10s_running"] = True
                             st.session_state["has_run"] = True
@@ -644,7 +658,7 @@ def main() -> None:
                             st.warning("Missing MP4; actions disabled.")
                 with a2:
                     disabled_compare = running or (not _ok) or (not mp4_ok)
-                    if st.button("Compare this frame", help="Grabs current frame in both modes.", use_container_width=True, disabled=disabled_compare):
+                    if st.button("Compare this frame", help="Grab current frame in both modes and show A/B", use_container_width=True, disabled=disabled_compare):
                         try:
                             client.ab_compare(mp4)
                             st.session_state["show_ab"] = True
@@ -653,25 +667,26 @@ def main() -> None:
                         except Exception as e:
                             st.warning(f"Compare failed: {e}")
                 with a3:
-                    if running and st.button("Stop run", use_container_width=True):
+                    if running and st.button("Stop run", use_container_width=True, help="Cancel the active run"):
                         try:
                             client.run_control("stop")
                             st.toast("Stopped.", icon="⏹️")
                         except Exception as e:
                             st.warning(f"Stop failed: {e}")
                 with a4:
-                    if has_artifacts and st.button("Clear results", use_container_width=True):
+                    if has_artifacts and st.button("Clear results", use_container_width=True, help="Remove artifacts and telemetry for a fresh run"):
                         try:
                             client.clear()
                         except Exception:
                             pass
                         st.session_state["show_ab"] = False
                         st.toast("Cleared.", icon="🧹")
+                st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
                 # P1: quick metrics & report
                 b1, b2 = st.columns([1.2,1.6])
                 with b1:
-                    if st.button("Score last run", use_container_width=True, disabled=not st.session_state.get("has_run")):
+                    if st.button("Score last run", use_container_width=True, disabled=not st.session_state.get("has_run"), help="Compute simple metrics from events.jsonl"):
                         try:
                             import json as _json
                             from pathlib import Path as _P
@@ -703,7 +718,7 @@ def main() -> None:
                         except Exception as e:
                             st.warning(f"Scoring failed: {e}")
                 with b2:
-                    if st.button("Generate report (PDF)", use_container_width=True, disabled=not st.session_state.get("has_run")):
+                    if st.button("Generate report (PDF)", use_container_width=True, disabled=not st.session_state.get("has_run"), help="Save a brief PDF with summary and last frame"):
                         try:
                             from PIL import Image as PILImage, ImageDraw
                             out_pdf = Path("runs/latest/report.pdf")
@@ -764,6 +779,7 @@ def main() -> None:
                             st.toast("Re‑run complete.", icon="🔁")
                         except Exception as e:
                             st.warning(f"Re‑run failed: {e}")
+                st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
                 # A/B slider section
                 st.markdown("### Profile compare (single frame)")
@@ -838,6 +854,7 @@ def main() -> None:
                 # Artifacts panel
                 st.markdown("### Artifacts")
                 last_frame = _P("runs/latest/last_frame.png")
+                ab_comp = _P("runs/latest/ab_composite.png")
                 out_mp4 = _P("runs/latest/out.mp4")
                 report_pdf = _P("runs/latest/report.pdf")
                 ac1, ac2 = st.columns([1,1])
@@ -849,6 +866,10 @@ def main() -> None:
                             with cpl:
                                 if st.button("Copy path (image)"):
                                     st.info(str(last_frame))
+                        if ab_comp.exists():
+                            st.image(str(ab_comp), caption="ab_composite.png", use_column_width=True)
+                            if st.button("Copy path (composite)"):
+                                st.info(str(ab_comp))
                     with ac2:
                         if out_mp4.exists():
                             st.video(str(out_mp4))
