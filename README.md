@@ -189,6 +189,18 @@ uvicorn app.services.api:app --host 0.0.0.0 --port 8000
 streamlit run ui/streamlit_app.py --server.port 8501
 ```
 
+### Offline mode
+
+If you need to present without a backend, set `PERCEPTION_OFFLINE=1` before launching the UI. The popout behaves the same as online; actions read/write `runs/latest/*` and the status chip remains green.
+
+Offline assets live under `offline/<scenario>/` and are copied to `runs/latest/` during actions. For each scenario (e.g., `day`, `night`, `rain`, `tunnel`, `crosswalk`, `snow`) include:
+
+- `realtime_frame.png`, `accuracy_frame.png`, `last_frame.png`
+- `events.jsonl` (approx. 240 rows with fields: frame_id, fps, pre_ms, model_ms, post_ms, provider, level)
+- Optional: `out.mp4`, `report.pdf`
+
+This keeps the UI experience identical while offline.
+
 ---
 
 ## Using PerceptionLab

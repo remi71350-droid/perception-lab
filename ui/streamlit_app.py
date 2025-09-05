@@ -59,6 +59,7 @@ def inject_base_styles() -> None:
         }
         .top-banner img { max-height: 173px; display: block; margin: 0; }
         .stButton>button { transition: all 200ms ease-in-out; border-radius: 8px; }
+        .stButton>button { white-space: nowrap; }
         .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 12px 14px; border-radius: 12px; box-shadow: 0 6px 18px rgba(0,0,0,0.18); }
         .sticky-right { position: sticky; top: 90px; }
         #preview-pane { position: sticky; top: 90px; }
@@ -151,7 +152,7 @@ def inject_base_styles() -> None:
         .carousel-center { display:flex; width:100%; text-align:center; }
         .carousel-frame { display:inline-block; margin: 0 auto; padding: 0; }
         .carousel-viewport { width: calc(3 * var(--cardw)); overflow: hidden; margin: 0 auto; padding: 0; }
-        .carousel-track { display: flex; gap: 0; will-change: transform; }
+        .carousel-track { display: flex; gap: 0; will-change: transform; justify-content: center; }
         .slide-next { transform: translateX(0); animation: slideNext 280ms ease-out forwards; }
         .slide-prev { transform: translateX(calc(-3 * var(--cardw))); animation: slidePrev 280ms ease-out forwards; }
         @keyframes slideNext {
