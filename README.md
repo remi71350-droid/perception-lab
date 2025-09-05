@@ -144,8 +144,10 @@ Fill only the providers you plan to use:
 
 ```
 REPLICATE_API_TOKEN=
-ROBOFLOW_API_KEY=
 HF_API_TOKEN=
+HF_SEG_ENDPOINT=
+# Optional/advanced
+ROBOFLOW_API_KEY=
 GOOGLE_APPLICATION_CREDENTIALS=/app/creds/gcp.json
 AZURE_VISION_ENDPOINT=
 AZURE_VISION_KEY=
@@ -154,6 +156,8 @@ AWS_SECRET_ACCESS_KEY=
 BEDROCK_REGION=
 AZURE_OPENAI_ENDPOINT=
 AZURE_OPENAI_KEY=
+# CORS (comma-separated origins for deployed UI)
+CORS_ALLOW_ORIGINS=http://localhost:8501,http://127.0.0.1:8501
 ```
 
 ### 3) Configure adapters and profiles
@@ -419,6 +423,7 @@ An optional guided button performs a short, resilient sequence: run realtime bri
 
 - Segmentation (HF endpoint): set `HF_API_TOKEN` and `HF_SEG_ENDPOINT` for real masks; otherwise, soft masks derive from boxes for visualization.
 - OCR (Replicate PaddleOCR): set `REPLICATE_API_TOKEN` and a `version` in `providers.yaml`.
+- CORS (for deployed UI): set `CORS_ALLOW_ORIGINS` with your UI origins (comma‑separated).
 
 PerceptionLab expects two 10–15 s clips and a small COCO labels file. To trim videos locally with ffmpeg:
 
