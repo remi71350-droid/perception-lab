@@ -61,6 +61,7 @@ def inject_base_styles() -> None:
         .stButton>button { transition: all 200ms ease-in-out; border-radius: 8px; }
         .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 12px 14px; border-radius: 12px; box-shadow: 0 6px 18px rgba(0,0,0,0.18); }
         .sticky-right { position: sticky; top: 90px; }
+        #preview-pane { position: sticky; top: 90px; }
         .sticky-hud { position: sticky; top: 6px; z-index: 100; background: rgba(6,15,37,0.85); backdrop-filter: blur(4px); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(2,171,193,0.2); }
 
         /* Centering helpers */
@@ -542,7 +543,7 @@ def main() -> None:
                 except Exception:
                     gif_b64 = ""
                 # Sticky preview panel
-                st.markdown("<div class='sticky-right card'>", unsafe_allow_html=True)
+                st.markdown("<div id='preview-pane' class='sticky-right card'>", unsafe_allow_html=True)
                 if gif_b64:
                     st.image(f"data:image/gif;base64,{gif_b64}", use_column_width=True)
                 meta = sel.get("meta", "")
@@ -853,6 +854,7 @@ def main() -> None:
                 # Artifacts panel
                 st.markdown("### Artifacts")
                 last_frame = _P("runs/latest/last_frame.png")
+                ab_comp = _P("runs/latest/ab_composite.png")
                 out_mp4 = _P("runs/latest/out.mp4")
                 report_pdf = _P("runs/latest/report.pdf")
                 ac1, ac2 = st.columns([1,1])
@@ -864,6 +866,10 @@ def main() -> None:
                             with cpl:
                                 if st.button("Copy path (image)"):
                                     st.info(str(last_frame))
+                        if ab_comp.exists():
+                            st.image(str(ab_comp), caption="ab_composite.png", use_column_width=True)
+                            if st.button("Copy path (composite)"):
+                                st.info(str(ab_comp))
                     with ac2:
                         if out_mp4.exists():
                             st.video(str(out_mp4))
