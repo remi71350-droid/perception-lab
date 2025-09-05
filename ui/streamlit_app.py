@@ -1220,12 +1220,32 @@ def main() -> None:
 
     with tab_use_cases:
         st.subheader("Use Cases")
-        # Make the use case tab labels smaller to avoid overlap
+        # Make the Use Cases tab labels smaller to avoid overlap (scoped via JS-assigned class)
         st.markdown(
             """
+            <script>
+            (function(){
+              const titles = [
+                'Roadway Traffic & Sign Intelligence',
+                'Warehouse Safety & PPE',
+                'Retail Shelf QA (OCR)',
+                'Smart City Anomaly & Flow',
+                'Agriculture Field Scan'
+              ];
+              const lists = Array.from(document.querySelectorAll('section.main div[role="tablist"]'));
+              for (const tl of lists){
+                const labels = Array.from(tl.querySelectorAll('button p')).map(p=> (p.innerText||'').trim());
+                // Heuristic: if any expected title appears, tag this tablist
+                if (labels.some(l=> titles.some(t=> l.startsWith(t.substring(0,6))))){
+                  tl.classList.add('use-cases-tabs');
+                }
+              }
+            })();
+            </script>
             <style>
-            /* scope to the next tabs block by shrinking labels */
-            section.main div[role='tablist'] button p { font-size: 13px; }
+              .use-cases-tabs button p { font-size: 11px !important; line-height: 1.15; font-weight: 500; }
+              .use-cases-tabs button { padding-top: 2px !important; padding-bottom: 2px !important; }
+              .use-cases-tabs { gap: 4px !important; }
             </style>
             """,
             unsafe_allow_html=True,
