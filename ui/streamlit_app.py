@@ -695,7 +695,7 @@ def main() -> None:
                 st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
                 # Primary actions row
-                a1, a2, a3, a4 = st.columns([1.0,2.2,1.0,1.0])
+                a1, a2, a3, a4 = st.columns([1.0,2.0,1.0,1.6])
                 running = st.session_state.get("_run10s_running", False)
                 mp4 = (sel or {}).get("mp4")
                 mp4_ok = bool(mp4 and Path(mp4).exists())
