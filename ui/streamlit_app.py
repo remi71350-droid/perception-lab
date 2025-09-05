@@ -532,10 +532,8 @@ def main() -> None:
             name_text = (sel or {}).get("desc", "")
             hdr_left, hdr_right = st.columns([8,4])
             with hdr_left:
-                st.markdown("#### Scenario workspace")
-                if name_text:
-                    st.caption(name_text)
-                st.caption("Pick mode, run a short segment, compare, and export artifacts.")
+                # Scenario workspace heading moved below preview in right column per layout request
+                st.markdown("")
             with hdr_right:
                 _ok = _ping_api(st.session_state.api_base)
                 chip = "🟢 Connected" if _ok else "🔴 Offline"
@@ -697,6 +695,11 @@ def main() -> None:
                 except Exception:
                     pass
                 rendered_side_panels = True
+                # Scenario workspace info under right column content
+                st.markdown("#### Scenario workspace")
+                if name_text:
+                    st.caption(name_text)
+                st.caption("Pick mode, run a short segment, compare, and export artifacts.")
 
             with left:
                 # Stepbar: labels outside, bigger text inside buttons
