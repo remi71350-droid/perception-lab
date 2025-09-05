@@ -3,6 +3,8 @@ from __future__ import annotations
 import time
 from pathlib import Path
 import os
+import sys
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import streamlit as st
 import requests
@@ -80,8 +82,8 @@ def inject_base_styles() -> None:
         }
         .stTabs [data-baseweb="tab"] {
             font-family: 'Century Gothic', CenturyGothic, AppleGothic, 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif;
-            font-weight: 900 !important;
-            font-size: 2rem !important; /* tuned down */
+            font-weight: 700 !important;
+            font-size: 1.5rem !important;
             letter-spacing: 0.015em;
             color: var(--aqua); /* default: blue-green */
             padding: 18px 24px;
@@ -105,7 +107,7 @@ def inject_base_styles() -> None:
             background: linear-gradient(180deg, rgba(2,171,193,0.20), rgba(2,171,193,0.05));
             border-color: rgba(2,171,193,0.45);
             box-shadow: 0 0 0 1px rgba(2,171,193,0.28), 0 8px 18px rgba(2,171,193,0.14);
-            font-weight: 900 !important;
+            font-weight: 800 !important;
             text-shadow: 0 0 6px rgba(2,171,193,0.25);
         }
         .stTabs [data-baseweb="tab"]:focus-visible {
@@ -216,6 +218,11 @@ def inject_base_styles() -> None:
             box-shadow: -5px 0 10px rgba(0,0,0,0.3);
             z-index: 10;
         }
+        /* Stepper */
+        .stepper { display:flex; gap:8px; align-items:center; margin: 6px 0 2px 0; }
+        .step { padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14); font-size: 12px; color:#cfeaf0; background: rgba(255,255,255,0.04); }
+        .step.active { color: #01232a; background: var(--aqua); border-color: rgba(2,171,193,0.65); font-weight: 700; }
+        .stepper-hint { font-size: 12px; color:#9fc7ce; margin-bottom: 6px; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -486,6 +493,19 @@ def main() -> None:
         else:
             # Focus mode: selected preview on the right, tools on the left
             sel = st.session_state.get("selected_scenario")
+            # Ensure state flags
+            st.session_state.setdefault("is_running", False)
+            st.session_state.setdefault("has_run", False)
+            st.session_state.setdefault("show_ab", False)
+            # Artifacts flag
+            runs_dir = Path("runs/latest")
+            has_artifacts = False
+            if runs_dir.exists():
+                for p in runs_dir.iterdir():
+                    if p.is_file():
+                        has_artifacts = True
+                        break
+            st.session_state["has_artifacts"] = has_artifacts
             left, right = st.columns([7,5])
 
             # Header (full-width above columns)
@@ -559,6 +579,16 @@ def main() -> None:
                 st.markdown("</div>", unsafe_allow_html=True)
 
             with left:
+                # Stepper
+                s1, s2, s3, s4 = st.columns([1.2,1.2,1.2,1.2])
+                st.markdown("<div class='stepper'>" 
+                            f"<div class='step {'active' if True else ''}'>1 Select mode</div>"
+                            f"<div class='step {'active' if st.session_state.get('has_run') else ''}'>2 Run</div>"
+                            f"<div class='step {'active' if st.session_state.get('show_ab') else ''}'>3 Compare</div>"
+                            f"<div class='step {'active' if st.session_state.get('has_artifacts') else ''}'>4 Export</div>"
+                            + "</div>", unsafe_allow_html=True)
+                st.markdown("<div class='stepper-hint'>Follow steps left to right.</div>", unsafe_allow_html=True)
+
                 # Mode selector + microcopy
                 profile = st.radio(
                     "",
@@ -569,15 +599,13 @@ def main() -> None:
                     key="profile_mode_focus",
                 )
                 st.caption("Realtime prioritizes throughput. Accuracy prioritizes detail.")
-                # Summary card (using current controls if available)
-                st.markdown("<div class='card'>", unsafe_allow_html=True)
-                st.caption("Profile summary")
-                st.write({
-                    "input_size": 640 if profile == "realtime" else 1024,
-                    "confidence_thresh": st.session_state.get("conf_thresh_focus", 0.35),
-                    "nms_iou": st.session_state.get("nms_iou_focus", 0.5),
-                })
-                st.markdown("</div>", unsafe_allow_html=True)
+                # Summary expander
+                with st.expander("Profile summary", expanded=False):
+                    st.write({
+                        "input_size": 640 if profile == "realtime" else 1024,
+                        "confidence_thresh": st.session_state.get("conf_thresh_focus", 0.35),
+                        "nms_iou": st.session_state.get("nms_iou_focus", 0.5),
+                    })
 
                 # Primary actions row
                 a1, a2, a3, a4 = st.columns([1.2,1.4,1.1,1.1])
@@ -613,7 +641,8 @@ def main() -> None:
                         else:
                             st.warning("Missing MP4; actions disabled.")
                 with a2:
-                    if st.button("Compare this frame", use_container_width=True, disabled=disabled_common):
+                    disabled_compare = running or (not _ok) or (not mp4_ok)
+                    if st.button("Compare this frame", use_container_width=True, disabled=disabled_compare):
                         try:
                             client.ab_compare(mp4)
                             st.session_state["show_ab"] = True
@@ -622,14 +651,14 @@ def main() -> None:
                         except Exception as e:
                             st.warning(f"Compare failed: {e}")
                 with a3:
-                    if st.button("Stop run", use_container_width=True, disabled=running or (not _ok)):
+                    if running and st.button("Stop run", use_container_width=True):
                         try:
                             client.run_control("stop")
                             st.toast("Stopped.", icon="⏹️")
                         except Exception as e:
                             st.warning(f"Stop failed: {e}")
                 with a4:
-                    if st.button("Clear results", use_container_width=True, disabled=not _ok):
+                    if has_artifacts and st.button("Clear results", use_container_width=True):
                         try:
                             client.clear()
                         except Exception:
@@ -744,7 +773,7 @@ def main() -> None:
                     st.caption("Click 'Compare this frame' to populate.")
 
                 # Telemetry compact table
-                if st.session_state.get("has_run"):
+                if st.session_state.get("has_run") and Path("runs/latest/events.jsonl").exists():
                     st.markdown("### Telemetry")
                     # Prefer reading events.jsonl if present
                     rows = []
@@ -791,23 +820,26 @@ def main() -> None:
                 out_mp4 = _P("runs/latest/out.mp4")
                 report_pdf = _P("runs/latest/report.pdf")
                 ac1, ac2 = st.columns([1,1])
-                with ac1:
-                    if last_frame.exists():
-                        st.image(str(last_frame), caption="last_frame.png", use_column_width=True)
-                        cpl, cpr = st.columns([1,3])
-                        with cpl:
-                            if st.button("Copy path (image)"):
-                                st.info(str(last_frame))
-                with ac2:
-                    if out_mp4.exists():
-                        st.video(str(out_mp4))
-                        if st.button("Copy path (video)"):
-                            st.info(str(out_mp4))
-                    if report_pdf.exists():
-                        st.link_button("Open report (PDF)", report_pdf.as_posix(), use_container_width=True)
-                        if st.button("Copy path (report)"):
-                            st.info(str(report_pdf))
-                st.caption("Artifacts reflect the current mode and overlay settings at capture time.")
+                if has_artifacts:
+                    with ac1:
+                        if last_frame.exists():
+                            st.image(str(last_frame), caption="last_frame.png", use_column_width=True)
+                            cpl, cpr = st.columns([1,3])
+                            with cpl:
+                                if st.button("Copy path (image)"):
+                                    st.info(str(last_frame))
+                    with ac2:
+                        if out_mp4.exists():
+                            st.video(str(out_mp4))
+                            if st.button("Copy path (video)"):
+                                st.info(str(out_mp4))
+                        if report_pdf.exists():
+                            st.link_button("Open report (PDF)", report_pdf.as_posix(), use_container_width=True)
+                            if st.button("Copy path (report)"):
+                                st.info(str(report_pdf))
+                    st.caption("Artifacts reflect the current mode and overlay settings at capture time.")
+                else:
+                    st.caption("Artifacts appear here after a run or compare.")
 
                 # Keyboard shortcuts: space (Run 10s), b (Compare), esc (Back)
                 st.markdown(
@@ -817,7 +849,7 @@ def main() -> None:
                       const buttons = [...document.querySelectorAll('button')];
                       function clickByText(t){ const el = buttons.find(b => (b.innerText||'').trim()===t); if(el){ e.preventDefault(); el.click(); }}
                       if(e.code==='Space'){ clickByText('Run 10s'); }
-                      if(e.key==='b' || e.key==='B'){ clickByText('Compare this frame'); }
+                      if(e.key==='b' || e.key==='B'){ if(clickByText('Save composite')===undefined){ clickByText('Compare this frame'); } }
                       if(e.key==='Escape'){ const el = buttons.find(b => (b.innerText||'').includes('Back to gallery')); if(el){ e.preventDefault(); el.click(); }}
                     });
                     </script>
