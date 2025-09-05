@@ -641,7 +641,7 @@ def main() -> None:
                             if st.button("Copy path (image)"):
                                 st.info(str(last_frame))
                         if ab_comp.exists():
-                            st.image(str(ab_comp), caption="ab_composite.png", width= int(0.75 * 700))
+                            st.image(str(ab_comp), caption="ab_composite.png", use_column_width=True)
                             if st.button("Copy path (composite)"):
                                 st.info(str(ab_comp))
                     with rac2:
@@ -1017,8 +1017,7 @@ def main() -> None:
                 if st.session_state.get("show_ab") and rt_img.exists() and ac_img.exists():
                     try:
                         from streamlit_image_comparison import image_comparison
-                        # Reduce displayed size to ~3/4 to avoid overlapping adjacent text/columns
-                        image_comparison(img1=str(rt_img), img2=str(ac_img), label1="Realtime", label2="Accuracy", width=525)
+                        image_comparison(img1=str(rt_img), img2=str(ac_img), label1="Realtime", label2="Accuracy", width=700)
                         if st.button("Save composite"):
                             try:
                                 from PIL import Image as PILImage
@@ -1100,7 +1099,7 @@ def main() -> None:
                                 if st.button("Copy path (image)"):
                                     st.info(str(last_frame))
                         if ab_comp.exists():
-                            st.image(str(ab_comp), caption="ab_composite.png", width= int(0.75 * 700))
+                            st.image(str(ab_comp), caption="ab_composite.png", use_column_width=True)
                             if st.button("Copy path (composite)"):
                                 st.info(str(ab_comp))
                     with ac2:
