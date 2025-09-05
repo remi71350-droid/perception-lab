@@ -535,12 +535,10 @@ def main() -> None:
                 # Scenario workspace heading moved below preview in right column per layout request
                 st.markdown("")
             with hdr_right:
-                _ok = _ping_api(st.session_state.api_base)
-                chip = "🟢 Connected" if _ok else "🔴 Offline"
-                tooltip = "Connected (offline mode)" if st.session_state.get("offline") else "Connected"
-                st.markdown(f"<div style='text-align:right; margin-top:-6px;'><span title='{tooltip}'>{chip}</span></div>", unsafe_allow_html=True)
+                pass
             # Left column content begins
             with left:
+                st.markdown("")
 
             with right:
                 try:
@@ -556,30 +554,21 @@ def main() -> None:
                         f"<img src='data:image/gif;base64,{gif_b64}' alt='{alt}' style='width:100%;height:auto;border-radius:8px' />",
                         unsafe_allow_html=True,
                     )
-                # Back arrow button anchored at bottom-right of preview pane
-                st.markdown(
-                    """
-                    <div style='display:flex; justify-content:flex-end; margin-top:8px;'>
-                      <form action='' method='get'>
-                        <button name='__back_gallery__' style='display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; border-radius:10px; border:1px solid rgba(255,255,255,0.25); background:rgba(255,255,255,0.08); color:#cfeaf0; font-size:24px; font-weight:800;'>⟵</button>
-                      </form>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-                # Handle back via query hack
-                import streamlit as st as _st
-                if _st.query_params.get('__back_gallery__') is not None:
-                    st.session_state.update(
-                        view_mode="gallery",
-                        selected_scenario=None,
-                        show_ab=False,
-                        has_run=False,
-                        has_artifacts=False,
-                        is_running=False,
-                        carousel_anim="",
-                    )
-                    st.rerun()
+                # Back arrow button (bottom-right under preview)
+                _sp1, _sp2 = st.columns([10,1])
+                with _sp2:
+                    if st.button("⟵", key="back_to_gallery_right", help="Back to gallery"):
+                        st.session_state.update(
+                            view_mode="gallery",
+                            selected_scenario=None,
+                            show_ab=False,
+                            has_run=False,
+                            has_artifacts=False,
+                            is_running=False,
+                            carousel_anim="",
+                        )
+                        st.rerun()
+                
                 # Scenario metadata (lighting/env/features)
                 _sname = (sel or {}).get("mp4", "")
                 _stem = Path(_sname).stem if _sname else ""
