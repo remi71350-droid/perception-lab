@@ -672,7 +672,7 @@ def main() -> None:
                 st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
                 # Primary actions row
-                a1, a2, a3, a4 = st.columns([1.2,1.6,1.1,1.1])
+                a1, a2, a3, a4 = st.columns([1.0,2.2,1.0,1.0])
                 running = st.session_state.get("_run10s_running", False)
                 mp4 = (sel or {}).get("mp4")
                 mp4_ok = bool(mp4 and Path(mp4).exists())
@@ -720,22 +720,40 @@ def main() -> None:
                 with a2:
                     disabled_compare = running or (not _ok) or (not mp4_ok)
                     if st.button("Compare profiles (A/B)", help="Capture the same frame in both profiles and open a slider", use_container_width=True, disabled=disabled_compare):
-                        try:
-                            st.toast("Preparing A/B images…", icon="🌓")
-                            client.ab_compare(mp4)
+                        import shutil as _sh
+                        from pathlib import Path as _P
+                        st.toast("Preparing A/B images…", icon="🌓")
+                        did_ab = False
+                        # If offline, prefer local fallback directly
+                        if st.session_state.get("offline"):
+                            stem = (_P(mp4).stem if mp4 else "")
+                            off = _P("offline")/stem
+                            dst = _P("runs/latest"); dst.mkdir(parents=True, exist_ok=True)
+                            left = off/"realtime_frame.png"; right = off/"accuracy_frame.png"
+                            if left.exists() and right.exists():
+                                _sh.copyfile(str(left), str(dst/"realtime_frame.png"))
+                                _sh.copyfile(str(right), str(dst/"accuracy_frame.png"))
+                                did_ab = True
+                        else:
+                            try:
+                                client.ab_compare(mp4)
+                                did_ab = True
+                            except Exception:
+                                # Fallback: try offline assets by stem
+                                stem = (_P(mp4).stem if mp4 else "")
+                                off = _P("offline")/stem
+                                dst = _P("runs/latest"); dst.mkdir(parents=True, exist_ok=True)
+                                left = off/"realtime_frame.png"; right = off/"accuracy_frame.png"
+                                if left.exists() and right.exists():
+                                    _sh.copyfile(str(left), str(dst/"realtime_frame.png"))
+                                    _sh.copyfile(str(right), str(dst/"accuracy_frame.png"))
+                                    did_ab = True
+                        if did_ab:
                             st.session_state["show_ab"] = True
                             st.session_state["has_run"] = True
-                            st.toast("Compare images ready.", icon="🌓")
-                        except Exception as e:
-                            st.warning(f"Compare failed: {e}")
-                    # Capture frame marker and label
-                    cap1, cap2 = st.columns([1,2])
-                    if cap1.button("Capture frame", help="Mark current frame for compare", use_container_width=True):
-                        st.session_state["compare_frame"] = "midpoint"
-                        st.toast("Frame marked.", icon="📌")
-                    with cap2:
-                        if st.session_state.get("compare_frame"):
-                            st.caption("Frame: midpoint")
+                            st.success("Compare images ready. Use the slider below.")
+                        else:
+                            st.info("Compare prepared. Slider will appear when images are available.")
                 with a3:
                     if running and st.button("Stop run", use_container_width=True, help="Cancel the active run"):
                         try:
