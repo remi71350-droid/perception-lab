@@ -314,7 +314,7 @@ def main() -> None:
     _badge = "🟢 Connected" if _ok else "🔴 Offline"
     st.markdown(
         f"""
-        <div style="display:flex;justify-content:flex-end;align-items:center;font-size:12px;opacity:.9;margin-top:-10px;">
+        <div style=\"position:fixed; top:8px; right:12px; z-index:1000; font-size:12px; opacity:.95; background:rgba(6,14,38,0.6); padding:4px 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.15);\">
           <span>{_badge}</span>
         </div>
         """,
@@ -539,29 +539,8 @@ def main() -> None:
                 chip = "🟢 Connected" if _ok else "🔴 Offline"
                 tooltip = "Connected (offline mode)" if st.session_state.get("offline") else "Connected"
                 st.markdown(f"<div style='text-align:right; margin-top:-6px;'><span title='{tooltip}'>{chip}</span></div>", unsafe_allow_html=True)
-            # Big back arrow button on left column, near the controls
+            # Left column content begins
             with left:
-                if st.button("⟵", key="back_to_gallery", help="Back to gallery", use_container_width=False):
-                    st.session_state.update(
-                        view_mode="gallery",
-                        selected_scenario=None,
-                        show_ab=False,
-                        has_run=False,
-                        has_artifacts=False,
-                        is_running=False,
-                        carousel_anim="",
-                    )
-                    st.rerun()
-                st.markdown("<div class='back-arrow-btn'>⟵</div>", unsafe_allow_html=True)
-                # Approximate styling: render a large arrow via HTML for consistency
-                st.markdown(
-                    """
-                    <style>
-                      .back-arrow-btn { display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; border-radius:10px; border:1px solid rgba(255,255,255,0.25); background:rgba(255,255,255,0.06); color:#cfeaf0; font-size:24px; font-weight:800; margin-bottom:6px; }
-                    </style>
-                    """,
-                    unsafe_allow_html=True,
-                )
 
             with right:
                 try:
@@ -577,6 +556,30 @@ def main() -> None:
                         f"<img src='data:image/gif;base64,{gif_b64}' alt='{alt}' style='width:100%;height:auto;border-radius:8px' />",
                         unsafe_allow_html=True,
                     )
+                # Back arrow button anchored at bottom-right of preview pane
+                st.markdown(
+                    """
+                    <div style='display:flex; justify-content:flex-end; margin-top:8px;'>
+                      <form action='' method='get'>
+                        <button name='__back_gallery__' style='display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; border-radius:10px; border:1px solid rgba(255,255,255,0.25); background:rgba(255,255,255,0.08); color:#cfeaf0; font-size:24px; font-weight:800;'>⟵</button>
+                      </form>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                # Handle back via query hack
+                import streamlit as st as _st
+                if _st.query_params.get('__back_gallery__') is not None:
+                    st.session_state.update(
+                        view_mode="gallery",
+                        selected_scenario=None,
+                        show_ab=False,
+                        has_run=False,
+                        has_artifacts=False,
+                        is_running=False,
+                        carousel_anim="",
+                    )
+                    st.rerun()
                 # Scenario metadata (lighting/env/features)
                 _sname = (sel or {}).get("mp4", "")
                 _stem = Path(_sname).stem if _sname else ""
