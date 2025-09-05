@@ -209,7 +209,7 @@ This keeps the UI experience identical while offline.
 
 ## Using PerceptionLab
 
-### Scenarios (curated clips)
+### Detect (curated clips)
 
 <p>
 <strong>Day</strong><br/>
@@ -253,16 +253,16 @@ Busy crosswalk, pedestrians.<br/>
 <img src="assets/pedestrians.gif" alt="Pedestrians crosswalk" width="420"/>
 </p>
 
-**Run tab**  
+**Detect tab**  
 Pick a clip and a profile. Watch boxes, soft masks, track IDs with comet tails, and OCR labels. Toggle overlays, filter classes, adjust mask opacity, confidence and NMS. A HUD shows FPS and per‑stage latency; the event log is one click away. Use provider overrides for single‑frame detection, and export side‑by‑side via the compare slider.
 
 **Evaluate tab**  
 Select the labeled subset and tasks. See mAP@0.5, mean IoU, IDF1, and OCR accuracy with small plots.
 
-**Metrics tab**  
+**Monitor tab**  
 Prometheus metrics are exported by the API. Built‑in mini‑charts show FPS and per‑stage latencies; Grafana provides richer dashboards.
 
-**Reports tab**  
+**Evaluate (Reports merged here)**  
 Generate `runs/<id>/report.pdf`. The report includes a pipeline diagram, provenance table, metrics, latency histograms, and three annotated frames. Quick links show where to download `events.jsonl` and `metrics.json`.
 
 **Fusion tab**  
@@ -270,7 +270,7 @@ Visualize a single KITTI frame with LiDAR points projected onto the RGB image.
 
 ### User workflow (2-minute walkthrough)
 
-1. Open the Scenarios tab and select a clip. The workspace (popout) opens with the preview on the right.
+1. Open the Detect tab and select a clip. The workspace (popout) opens with the preview on the right.
 2. Pick an operating mode (realtime or accuracy). Run 10s to capture overlays and telemetry.
 3. Click Compare this frame to reveal the A/B slider; drag to compare profiles. Compute metrics to see averages and 95th percentiles.
 4. Generate report (PDF) to save a compact summary with metrics, latency plots, and frames. Artifacts appear under `runs/latest/`.
@@ -411,13 +411,7 @@ An optional guided button performs a short, resilient sequence: run realtime bri
 
 ---
 
-## Use Cases (pre‑packaged screens)
-
-- Roadway Traffic & Sign Intelligence: filter to signs/lights, extract OCR, and compare profiles.
-- Warehouse Safety & PPE: draw safety zones; count people in‑zone.
-- Retail Shelf QA (OCR): extract price/label text and download CSV.
-- Smart City Anomaly & Flow: live FPS/latency charts and spike frames.
-- Agriculture Field Scan: vegetation heat overlay and obstacle highlight.
+<!-- Use Cases section removed from nav; presets now live in Evaluate. -->
 
 ---
 
