@@ -147,9 +147,9 @@ def inject_base_styles() -> None:
             background: rgba(255,255,255,0.02);
             text-align: center;
         }
-        .carousel-center { display: flex; justify-content: center; width: 100%; }
-        .carousel-frame { display: inline-block; margin: 0; padding: 0; }
-        .carousel-viewport { width: calc(3 * var(--cardw)); overflow: hidden; margin: 0; padding: 0; }
+        .carousel-center { display:flex; width:100%; text-align:center; }
+        .carousel-frame { display:inline-block; margin: 0 auto; padding: 0; }
+        .carousel-viewport { width: calc(3 * var(--cardw)); overflow: hidden; margin: 0 auto; padding: 0; }
         .carousel-track { display: flex; gap: 0; will-change: transform; }
         .slide-next { transform: translateX(0); animation: slideNext 280ms ease-out forwards; }
         .slide-prev { transform: translateX(calc(-3 * var(--cardw))); animation: slidePrev 280ms ease-out forwards; }
@@ -440,6 +440,7 @@ def main() -> None:
                         sub, detail = rest.split(':', 1)
                     else:
                         sub, detail = rest, ''
+                    label_fn = Path(item.get("mp4", "")).name or ""
                     card_cls = "gif-card highlight" if highlight else "gif-card"
                     return (
                         f"<div class='{card_cls}' style='margin:0;'>"
@@ -447,7 +448,7 @@ def main() -> None:
                         f"  <div class='gif-sub'>{sub.strip()}</div>"
                         f"  <div class='gif-desc'>{detail.strip()}</div>"
                         f"  <img src='data:image/gif;base64,{b64}' />"
-                        f"  <div class='gif-fn'>{item['name']}</div>"
+                        f"  <div class='gif-fn'>{label_fn}</div>"
                         f"</div>"
                     )
 
@@ -460,14 +461,14 @@ def main() -> None:
                     + _card_html(right_i, False)
                 )
 
+                # Center block via Streamlit columns
                 st.markdown("<div class='carousel-center'><div class='carousel-frame'>", unsafe_allow_html=True)
                 st.markdown(
                     f"<div class='carousel-viewport'><div class='{track_class}' style='{track_style}'>{track_html}</div></div>",
                     unsafe_allow_html=True,
                 )
-
-                # Buttons row (non-form buttons), centered under center card
-                sp1, cbl, cbs, cbr, sp2 = st.columns([2,1,1,1,2])
+                # Buttons row with wider spacers to avoid wrapping
+                sp1, cbl, cbs, cbr, sp2 = st.columns([3,1,1,1,3])
                 prev_clicked = cbl.button("< PREV", use_container_width=True)
                 select_clicked = cbs.button("SELECT", use_container_width=True)
                 next_clicked = cbr.button("NEXT >", use_container_width=True)
@@ -519,7 +520,8 @@ def main() -> None:
             with hdr_right:
                 _ok = _ping_api(st.session_state.api_base)
                 chip = "🟢 Connected" if _ok else "🔴 Offline"
-                st.markdown(f"<div style='text-align:right'>{chip}</div>", unsafe_allow_html=True)
+                tooltip = "Connected (offline mode)" if st.session_state.get("offline") else "Connected"
+                st.markdown(f"<div style='text-align:right'><span title='{tooltip}'>{chip}</span></div>", unsafe_allow_html=True)
                 if st.button("← Back to gallery", type="secondary", use_container_width=True):
                     st.session_state.update(view_mode="gallery", selected_scenario=None, show_ab=False, carousel_anim="")
                     st.rerun()
@@ -642,7 +644,7 @@ def main() -> None:
                             st.warning("Missing MP4; actions disabled.")
                 with a2:
                     disabled_compare = running or (not _ok) or (not mp4_ok)
-                    if st.button("Compare this frame", use_container_width=True, disabled=disabled_compare):
+                    if st.button("Compare this frame", help="Grabs current frame in both modes.", use_container_width=True, disabled=disabled_compare):
                         try:
                             client.ab_compare(mp4)
                             st.session_state["show_ab"] = True
@@ -743,6 +745,25 @@ def main() -> None:
                     if st.button("Reset to defaults", use_container_width=False):
                         st.session_state.update(mask_opacity_focus=0.35, conf_thresh_focus=0.35, nms_iou_focus=0.5, class_filter_focus="", ov_boxes_focus=True, ov_tracks_focus=True, ov_ocr_focus=True)
                         st.toast("Thresholds reset.", icon="↩️")
+                    if st.button("Apply & re‑run", use_container_width=False, disabled=disabled_common):
+                        try:
+                            overlays = {
+                                "boxes": st.session_state.get("ov_boxes_focus", True),
+                                "tracks": st.session_state.get("ov_tracks_focus", True),
+                                "ocr": st.session_state.get("ov_ocr_focus", True),
+                                "hud": st.session_state.get("ov_hud_focus", False),
+                            }
+                            thresholds = {
+                                "confidence": st.session_state.get("conf_thresh_focus", 0.35),
+                                "nms_iou": st.session_state.get("nms_iou_focus", 0.5),
+                                "mask_opacity": st.session_state.get("mask_opacity_focus", 0.35),
+                                "include": st.session_state.get("class_filter_focus", ""),
+                            }
+                            client.run_video(mp4, profile, duration_s=10, emit_video=False, overlays=overlays, thresholds=thresholds)
+                            st.session_state["has_run"] = True
+                            st.toast("Re‑run complete.", icon="🔁")
+                        except Exception as e:
+                            st.warning(f"Re‑run failed: {e}")
 
                 # A/B slider section
                 st.markdown("### Profile compare (single frame)")
@@ -840,6 +861,10 @@ def main() -> None:
                     st.caption("Artifacts reflect the current mode and overlay settings at capture time.")
                 else:
                     st.caption("Artifacts appear here after a run or compare.")
+
+                # Inline missing asset warning
+                if not mp4_ok:
+                    st.warning(f"Source missing: {mp4}")
 
                 # Keyboard shortcuts: space (Run 10s), b (Compare), esc (Back)
                 st.markdown(
