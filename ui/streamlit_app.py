@@ -314,7 +314,7 @@ def main() -> None:
     _badge = "🟢 Connected" if _ok else "🔴 Offline"
     st.markdown(
         f"""
-        <div style="display:flex;justify-content:flex-end;align-items:center;font-size:12px;opacity:.9;">
+        <div style="display:flex;justify-content:flex-end;align-items:center;font-size:12px;opacity:.9;margin-top:-10px;">
           <span>{_badge}</span>
         </div>
         """,
@@ -538,8 +538,10 @@ def main() -> None:
                 _ok = _ping_api(st.session_state.api_base)
                 chip = "🟢 Connected" if _ok else "🔴 Offline"
                 tooltip = "Connected (offline mode)" if st.session_state.get("offline") else "Connected"
-                st.markdown(f"<div style='text-align:right'><span title='{tooltip}'>{chip}</span></div>", unsafe_allow_html=True)
-                if st.button("← Back to gallery", type="secondary", use_container_width=True):
+                st.markdown(f"<div style='text-align:right; margin-top:-6px;'><span title='{tooltip}'>{chip}</span></div>", unsafe_allow_html=True)
+            # Big back arrow button on left column, near the controls
+            with left:
+                if st.button("⟵", key="back_to_gallery", help="Back to gallery", use_container_width=False):
                     st.session_state.update(
                         view_mode="gallery",
                         selected_scenario=None,
@@ -550,6 +552,16 @@ def main() -> None:
                         carousel_anim="",
                     )
                     st.rerun()
+                st.markdown("<div class='back-arrow-btn'>⟵</div>", unsafe_allow_html=True)
+                # Approximate styling: render a large arrow via HTML for consistency
+                st.markdown(
+                    """
+                    <style>
+                      .back-arrow-btn { display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; border-radius:10px; border:1px solid rgba(255,255,255,0.25); background:rgba(255,255,255,0.06); color:#cfeaf0; font-size:24px; font-weight:800; margin-bottom:6px; }
+                    </style>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
             with right:
                 try:
