@@ -510,13 +510,13 @@ def main() -> None:
                         has_artifacts = True
                         break
             st.session_state["has_artifacts"] = has_artifacts
-            # Determine current step (1..4)
+            # Determine current step (1..4): 1(select) -> 2(run) -> 3(compare) -> 4(export)
             ab_comp = (runs_dir/"ab_composite.png").exists() if runs_dir.exists() else False
             report_exists = (runs_dir/"report.pdf").exists() if runs_dir.exists() else False
             curr_step = 1
             if st.session_state.get("has_run"): curr_step = 2
             if st.session_state.get("show_ab"): curr_step = 3
-            if report_exists or ab_comp or has_artifacts: curr_step = 4
+            if report_exists or ab_comp: curr_step = 4
             left, right = st.columns([7,5])
 
             # Header (full-width above columns)
@@ -533,7 +533,15 @@ def main() -> None:
                 tooltip = "Connected (offline mode)" if st.session_state.get("offline") else "Connected"
                 st.markdown(f"<div style='text-align:right'><span title='{tooltip}'>{chip}</span></div>", unsafe_allow_html=True)
                 if st.button("← Back to gallery", type="secondary", use_container_width=True):
-                    st.session_state.update(view_mode="gallery", selected_scenario=None, show_ab=False, carousel_anim="")
+                    st.session_state.update(
+                        view_mode="gallery",
+                        selected_scenario=None,
+                        show_ab=False,
+                        has_run=False,
+                        has_artifacts=False,
+                        is_running=False,
+                        carousel_anim="",
+                    )
                     st.rerun()
 
             with right:
@@ -545,7 +553,11 @@ def main() -> None:
                 # Sticky preview panel
                 st.markdown("<div id='preview-pane' class='sticky-right card'>", unsafe_allow_html=True)
                 if gif_b64:
-                    st.image(f"data:image/gif;base64,{gif_b64}", use_column_width=True)
+                    alt = f"Scenario preview: {name_text}"
+                    st.markdown(
+                        f"<img src='data:image/gif;base64,{gif_b64}' alt='{alt}' style='width:100%;height:auto;border-radius:8px' />",
+                        unsafe_allow_html=True,
+                    )
                 meta = sel.get("meta", "")
                 if name_text:
                     st.caption(name_text)
@@ -680,6 +692,9 @@ def main() -> None:
                         except Exception:
                             pass
                         st.session_state["show_ab"] = False
+                        st.session_state["has_run"] = False
+                        st.session_state["has_artifacts"] = False
+                        st.session_state["telemetry_rows"] = []
                         st.toast("Cleared.", icon="🧹")
                 st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
