@@ -649,15 +649,19 @@ def main() -> None:
                 )
                 st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
-                # Mode selector + microcopy
-                profile = st.radio(
-                    "",
-                    options=["realtime", "accuracy"],
-                    horizontal=True,
-                    index=0,
-                    label_visibility="collapsed",
-                    key="profile_mode_focus",
-                )
+                # Mode selector + microcopy (hint to the right of the radio)
+                col_r, col_hint = st.columns([1, 2])
+                with col_r:
+                    profile = st.radio(
+                        "",
+                        options=["realtime", "accuracy"],
+                        horizontal=True,
+                        index=0,
+                        label_visibility="collapsed",
+                        key="profile_mode_focus",
+                    )
+                with col_hint:
+                    st.markdown("<span style='font-size:12px; opacity:.85'>(Realtime prioritizes throughput. Accuracy prioritizes detail.)</span>", unsafe_allow_html=True)
                 # Make radio labels smaller and all-caps via CSS
                 st.markdown(
                     """
@@ -668,7 +672,6 @@ def main() -> None:
                     """,
                     unsafe_allow_html=True,
                 )
-                st.caption("Realtime prioritizes throughput. Accuracy prioritizes detail.")
                 # Profile badges (compact, with tooltips)
                 _inp = 640 if profile == "realtime" else 1024
                 _conf = float(st.session_state.get("conf_thresh_focus", 0.35))
