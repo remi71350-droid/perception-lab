@@ -626,7 +626,10 @@ def main() -> None:
                 # Move Artifacts and Bookmarks under the preview on the right
                 from pathlib import Path as _P
                 st.markdown("### Artifacts")
+                # Prefer data/offline last_frame if present in offline mode
                 last_frame = _P("runs/latest/last_frame.png")
+                if st.session_state.get("offline") and _P("data/offline/last_frame.png").exists():
+                    last_frame = _P("data/offline/last_frame.png")
                 ab_comp = _P("runs/latest/ab_composite.png")
                 out_mp4 = _P("runs/latest/out.mp4")
                 report_pdf = _P("runs/latest/report.pdf")
@@ -638,7 +641,7 @@ def main() -> None:
                             if st.button("Copy path (image)"):
                                 st.info(str(last_frame))
                         if ab_comp.exists():
-                            st.image(str(ab_comp), caption="ab_composite.png", use_column_width=True)
+                            st.image(str(ab_comp), caption="ab_composite.png", width= int(0.75 * 700))
                             if st.button("Copy path (composite)"):
                                 st.info(str(ab_comp))
                     with rac2:
@@ -834,10 +837,9 @@ def main() -> None:
                         from pathlib import Path as _P
                         st.toast("Preparing A/B images…", icon="🌓")
                         did_ab = False
-                        # If offline, prefer local fallback directly
+                        # If offline, prefer local fallback directly (data/offline first)
                         if st.session_state.get("offline"):
-                            stem = (_P(mp4).stem if mp4 else "")
-                            off = _P("offline")/stem
+                            off = _P("data/offline")
                             dst = _P("runs/latest"); dst.mkdir(parents=True, exist_ok=True)
                             left = off/"realtime_frame.png"; right = off/"accuracy_frame.png"
                             if left.exists() and right.exists():
@@ -849,9 +851,8 @@ def main() -> None:
                                 client.ab_compare(mp4)
                                 did_ab = True
                             except Exception:
-                                # Fallback: try offline assets by stem
-                                stem = (_P(mp4).stem if mp4 else "")
-                                off = _P("offline")/stem
+                                # Fallback: try data/offline assets
+                                off = _P("data/offline")
                                 dst = _P("runs/latest"); dst.mkdir(parents=True, exist_ok=True)
                                 left = off/"realtime_frame.png"; right = off/"accuracy_frame.png"
                                 if left.exists() and right.exists():
@@ -1016,7 +1017,8 @@ def main() -> None:
                 if st.session_state.get("show_ab") and rt_img.exists() and ac_img.exists():
                     try:
                         from streamlit_image_comparison import image_comparison
-                        image_comparison(img1=str(rt_img), img2=str(ac_img), label1="Realtime", label2="Accuracy", width=700)
+                        # Reduce displayed size to ~3/4 to avoid overlapping adjacent text/columns
+                        image_comparison(img1=str(rt_img), img2=str(ac_img), label1="Realtime", label2="Accuracy", width=525)
                         if st.button("Save composite"):
                             try:
                                 from PIL import Image as PILImage
@@ -1098,7 +1100,7 @@ def main() -> None:
                                 if st.button("Copy path (image)"):
                                     st.info(str(last_frame))
                         if ab_comp.exists():
-                            st.image(str(ab_comp), caption="ab_composite.png", use_column_width=True)
+                            st.image(str(ab_comp), caption="ab_composite.png", width= int(0.75 * 700))
                             if st.button("Copy path (composite)"):
                                 st.info(str(ab_comp))
                     with ac2:
