@@ -1243,8 +1243,8 @@ def main() -> None:
             })();
             </script>
             <style>
-              .use-cases-tabs button p { font-size: 11px !important; line-height: 1.15; font-weight: 500; }
-              .use-cases-tabs button { padding-top: 2px !important; padding-bottom: 2px !important; }
+              .use-cases-tabs button p { font-size: 11px !important; line-height: 1.15; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+              .use-cases-tabs button { padding-top: 2px !important; padding-bottom: 2px !important; max-width: 100%; }
               .use-cases-tabs { gap: 4px !important; }
             </style>
             """,
