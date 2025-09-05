@@ -630,7 +630,7 @@ def main() -> None:
                 mp4_ok = bool(mp4 and Path(mp4).exists())
                 disabled_common = running or (not _ok) or (not mp4_ok)
                 with a1:
-                    if st.button("Run 10s", type="primary", use_container_width=True, disabled=disabled_common):
+                    if st.button("Run 10s", type="primary", use_container_width=True, disabled=disabled_common, help="Process a short segment with current mode and settings"):
                         if mp4_ok:
                             st.session_state["_run10s_running"] = True
                             st.session_state["has_run"] = True
@@ -658,7 +658,7 @@ def main() -> None:
                             st.warning("Missing MP4; actions disabled.")
                 with a2:
                     disabled_compare = running or (not _ok) or (not mp4_ok)
-                    if st.button("Compare this frame", help="Grabs current frame in both modes.", use_container_width=True, disabled=disabled_compare):
+                    if st.button("Compare this frame", help="Grab current frame in both modes and show A/B", use_container_width=True, disabled=disabled_compare):
                         try:
                             client.ab_compare(mp4)
                             st.session_state["show_ab"] = True
@@ -667,14 +667,14 @@ def main() -> None:
                         except Exception as e:
                             st.warning(f"Compare failed: {e}")
                 with a3:
-                    if running and st.button("Stop run", use_container_width=True):
+                    if running and st.button("Stop run", use_container_width=True, help="Cancel the active run"):
                         try:
                             client.run_control("stop")
                             st.toast("Stopped.", icon="⏹️")
                         except Exception as e:
                             st.warning(f"Stop failed: {e}")
                 with a4:
-                    if has_artifacts and st.button("Clear results", use_container_width=True):
+                    if has_artifacts and st.button("Clear results", use_container_width=True, help="Remove artifacts and telemetry for a fresh run"):
                         try:
                             client.clear()
                         except Exception:
@@ -686,7 +686,7 @@ def main() -> None:
                 # P1: quick metrics & report
                 b1, b2 = st.columns([1.2,1.6])
                 with b1:
-                    if st.button("Score last run", use_container_width=True, disabled=not st.session_state.get("has_run")):
+                    if st.button("Score last run", use_container_width=True, disabled=not st.session_state.get("has_run"), help="Compute simple metrics from events.jsonl"):
                         try:
                             import json as _json
                             from pathlib import Path as _P
@@ -718,7 +718,7 @@ def main() -> None:
                         except Exception as e:
                             st.warning(f"Scoring failed: {e}")
                 with b2:
-                    if st.button("Generate report (PDF)", use_container_width=True, disabled=not st.session_state.get("has_run")):
+                    if st.button("Generate report (PDF)", use_container_width=True, disabled=not st.session_state.get("has_run"), help="Save a brief PDF with summary and last frame"):
                         try:
                             from PIL import Image as PILImage, ImageDraw
                             out_pdf = Path("runs/latest/report.pdf")
