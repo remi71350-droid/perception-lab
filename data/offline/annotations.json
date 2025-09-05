@@ -1,0 +1,186 @@
+{
+  "source": "9d2195c9-63dd-4870-8f75-ec886f30f22e.png",
+  "image_size": {
+    "width": 1817,
+    "height": 997
+  },
+  "realtime": [
+    {
+      "bbox": [
+        455,
+        470,
+        585,
+        560
+      ],
+      "label": "pedestrians"
+    },
+    {
+      "bbox": [
+        580,
+        520,
+        710,
+        635
+      ],
+      "label": "car"
+    },
+    {
+      "bbox": [
+        150,
+        427,
+        235,
+        500
+      ],
+      "label": "car"
+    },
+    {
+      "bbox": [
+        1065,
+        535,
+        1245,
+        635
+      ],
+      "label": "car"
+    },
+    {
+      "bbox": [
+        732,
+        120,
+        780,
+        170
+      ],
+      "label": "traffic_light"
+    }
+  ],
+  "accuracy": [
+    {
+      "bbox": [
+        420,
+        466,
+        470,
+        545
+      ],
+      "label": "person"
+    },
+    {
+      "bbox": [
+        455,
+        470,
+        500,
+        560
+      ],
+      "label": "person"
+    },
+    {
+      "bbox": [
+        500,
+        465,
+        545,
+        560
+      ],
+      "label": "person"
+    },
+    {
+      "bbox": [
+        540,
+        470,
+        585,
+        560
+      ],
+      "label": "person"
+    },
+    {
+      "bbox": [
+        575,
+        470,
+        620,
+        560
+      ],
+      "label": "person"
+    },
+    {
+      "bbox": [
+        580,
+        520,
+        710,
+        635
+      ],
+      "label": "car"
+    },
+    {
+      "bbox": [
+        150,
+        427,
+        235,
+        500
+      ],
+      "label": "car"
+    },
+    {
+      "bbox": [
+        1065,
+        535,
+        1245,
+        635
+      ],
+      "label": "car"
+    },
+    {
+      "bbox": [
+        530,
+        515,
+        565,
+        555
+      ],
+      "label": "bag"
+    },
+    {
+      "bbox": [
+        732,
+        120,
+        780,
+        170
+      ],
+      "label": "traffic_light"
+    },
+    {
+      "bbox": [
+        925,
+        328,
+        960,
+        370
+      ],
+      "label": "traffic_light"
+    },
+    {
+      "bbox": [
+        1005,
+        405,
+        1065,
+        478
+      ],
+      "label": "sign"
+    },
+    {
+      "bbox": [
+        1280,
+        494,
+        1320,
+        590
+      ],
+      "label": "person"
+    },
+    {
+      "bbox": [
+        44,
+        420,
+        85,
+        495
+      ],
+      "label": "cyclist"
+    }
+  ],
+  "colors": {
+    "realtime": "cyan",
+    "accuracy": "amber"
+  }
+}

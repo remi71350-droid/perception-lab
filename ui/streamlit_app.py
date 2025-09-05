@@ -365,8 +365,8 @@ def main() -> None:
 
     api_base = st.session_state.api_base
 
-    tab_run, tab_eval, tab_metrics, tab_reports, tab_fusion, tab_use_cases = st.tabs(
-        ["Scenarios", "Evaluate", "Metrics", "Reports", "Fusion", "Use Cases"]
+    tab_run, tab_eval, tab_monitor, tab_fusion = st.tabs(
+        ["Detect", "Evaluate", "Monitor", "Fusion"]
     )
 
     # Initialize client
@@ -1162,9 +1162,46 @@ def main() -> None:
                     st.json(m)
                 except Exception as e:
                     st.warning(f"Failed to load metrics: {e}")
+        # Reports (merged into Evaluate)
+        st.markdown("---")
+        st.subheader("Reports")
+        run_id = st.text_input("Run ID", value="2025-09-02_12-00-00", key="eval_report_run_id")
+        if st.button("Generate PDF", key="eval_report_generate"):
+            try:
+                resp = requests.post(f"{api_base}/report", json={"run_id": run_id}, timeout=10)
+                st.success(resp.json())
+            except Exception as e:
+                st.warning(f"API not reachable yet: {e}")
+        st.markdown("---")
+        if st.button("Generate report for last run", key="eval_report_last"):
+            try:
+                last = requests.get(f"{api_base}/last_event", timeout=5).json()
+                last_run = last.get("run_id")
+                if not last_run:
+                    st.info("No recent runs.")
+                else:
+                    resp = requests.post(f"{api_base}/report", json={"run_id": last_run}, timeout=20).json()
+                    st.success(resp)
+                    rid = last_run
+                    col_d1, col_d2, col_d3 = st.columns(3)
+                    with col_d1:
+                        st.caption("Download logs")
+                        st.code(f"runs/{rid}/events.jsonl")
+                    with col_d2:
+                        st.caption("Download metrics")
+                        st.code(f"runs/{rid}/metrics.json")
+                    with col_d3:
+                        st.caption("Export run bundle")
+                        try:
+                            z = requests.post(f"{api_base}/export_run", json={"run_id": rid}, timeout=20).json()
+                            st.code(z.get("zip_path"))
+                        except Exception:
+                            st.info("Bundle export unavailable.")
+            except Exception as e:
+                st.warning(f"Failed to build report: {e}")
 
-    with tab_metrics:
-        st.subheader("Metrics")
+    with tab_monitor:
+        st.subheader("Monitor")
         st.markdown("View Prometheus metrics at `/metrics`. Grafana default: http://localhost:3000")
         if st.button("Fetch /metrics"):
             try:
@@ -1201,44 +1238,7 @@ def main() -> None:
             except Exception as e:
                 st.warning(f"Telemetry error: {e}")
 
-    with tab_reports:
-        st.subheader("Reports")
-        run_id = st.text_input("Run ID", value="2025-09-02_12-00-00")
-        if st.button("Generate PDF"):
-            try:
-                resp = requests.post(f"{api_base}/report", json={"run_id": run_id}, timeout=10)
-                st.success(resp.json())
-            except Exception as e:
-                st.warning(f"API not reachable yet: {e}")
-
-        st.markdown("---")
-        if st.button("Generate report for last run"):
-            try:
-                last = requests.get(f"{api_base}/last_event", timeout=5).json()
-                last_run = last.get("run_id")
-                if not last_run:
-                    st.info("No recent runs.")
-                else:
-                    resp = requests.post(f"{api_base}/report", json={"run_id": last_run}, timeout=20).json()
-                    st.success(resp)
-                    # Download links
-                    rid = last_run
-                    col_d1, col_d2, col_d3 = st.columns(3)
-                    with col_d1:
-                        st.caption("Download logs")
-                        st.code(f"runs/{rid}/events.jsonl")
-                    with col_d2:
-                        st.caption("Download metrics")
-                        st.code(f"runs/{rid}/metrics.json")
-                    with col_d3:
-                        st.caption("Export run bundle")
-                        try:
-                            z = requests.post(f"{api_base}/export_run", json={"run_id": rid}, timeout=20).json()
-                            st.code(z.get("zip_path"))
-                        except Exception:
-                            st.info("Bundle export unavailable.")
-            except Exception as e:
-                st.warning(f"Failed to build report: {e}")
+    # Reports tab removed; its content was merged into Evaluate
 
     with tab_fusion:
         st.subheader("Fusion")
@@ -1264,8 +1264,7 @@ def main() -> None:
             except Exception as e:
                 st.warning(f"Fusion projection failed: {e}")
 
-    with tab_use_cases:
-        st.subheader("Use Cases")
+    # Use Cases tab removed per request
         # Make the Use Cases tab labels smaller to avoid overlap (scoped via JS-assigned class)
         st.markdown(
             """
