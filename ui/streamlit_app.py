@@ -622,18 +622,31 @@ def main() -> None:
                 st.markdown("</div>", unsafe_allow_html=True)
 
             with left:
-                # Stepper
-                disabled_cls = " disabled" if st.session_state.get("is_running") else ""
+                # Stepbar: labels outside, bigger text inside buttons
                 st.markdown(
-                    "<div class='stepper' role='list' aria-label='Workflow steps'>"
-                    + f"<div class='step {'active' if curr_step==1 else ''}{disabled_cls}' role='listitem' aria-selected='{str(curr_step==1).lower()}'>1 Select mode</div>"
-                    + f"<div class='step {'active' if curr_step==2 else ''}{disabled_cls}' role='listitem' aria-selected='{str(curr_step==2).lower()}'>2 Run</div>"
-                    + f"<div class='step {'active' if curr_step==3 else ''}{disabled_cls}' role='listitem' aria-selected='{str(curr_step==3).lower()}'>3 Compare</div>"
-                    + f"<div class='step {'active' if curr_step==4 else ''}{disabled_cls}' role='listitem' aria-selected='{str(curr_step==4).lower()}'>4 Export</div>"
-                    + "</div>",
+                    """
+                    <div style='display:flex;gap:14px;align-items:center;flex-wrap:wrap;'>
+                      <div style='display:flex;gap:8px;align-items:center;'>
+                        <span style='opacity:.85'>STEP 1:</span>
+                        <button style='font-size:16px;padding:8px 14px;border:1px solid rgba(255,255,255,0.25);border-radius:8px;background:rgba(255,255,255,0.06);color:#cfeaf0;'>SELECT</button>
+                      </div>
+                      <div style='display:flex;gap:8px;align-items:center;'>
+                        <span style='opacity:.85'>STEP 2:</span>
+                        <button style='font-size:16px;padding:8px 14px;border:1px solid rgba(255,255,255,0.25);border-radius:8px;background:rgba(255,255,255,0.06);color:#cfeaf0;'>RUN</button>
+                      </div>
+                      <div style='display:flex;gap:8px;align-items:center;'>
+                        <span style='opacity:.85'>STEP 3:</span>
+                        <button style='font-size:16px;padding:8px 14px;border:1px solid rgba(255,255,255,0.25);border-radius:8px;background:rgba(255,255,255,0.06);color:#cfeaf0;'>COMPARE</button>
+                      </div>
+                      <div style='display:flex;gap:8px;align-items:center;'>
+                        <span style='opacity:.85'>STEP 4:</span>
+                        <button style='font-size:16px;padding:8px 14px;border:1px solid rgba(255,255,255,0.25);border-radius:8px;background:rgba(255,255,255,0.06);color:#cfeaf0;'>EXPORT</button>
+                      </div>
+                    </div>
+                    <div class='stepper-hint' style='margin-top:6px;'>Follow steps left to right.</div>
+                    """,
                     unsafe_allow_html=True,
                 )
-                st.markdown("<div class='stepper-hint'>Follow steps left to right.</div>", unsafe_allow_html=True)
                 st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
                 # Mode selector + microcopy
