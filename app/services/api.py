@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+import os
 from fastapi.responses import JSONResponse, PlainTextResponse
 import json
 from datetime import datetime, timezone
@@ -25,9 +26,10 @@ from app.providers.ocr.replicate_paddleocr import ReplicatePaddleOcr
 app = FastAPI(title="Perception Ops Lab API", version="0.1.0")
 
 # Enable CORS for local Streamlit UI
+_cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:8501,http://127.0.0.1:8501").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8501", "http://127.0.0.1:8501"],
+    allow_origins=[o.strip() for o in _cors_origins if o.strip()],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -227,34 +229,66 @@ def last_event() -> JSONResponse:
 @app.websocket("/ws/run_video")
 async def ws_run_video(ws: WebSocket) -> None:
     await ws.accept()
+    cap = None
     try:
         params = dict(ws.query_params)
         video_path = params.get("video_path", "data/samples/day.mp4")
         profile = params.get("profile", "realtime")
         run_id = registry.ensure_run()
-        # Send a few stub frames with timings/ids
-        for i in range(3):
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            await ws.send_json({"error": f"cannot open video: {video_path}"})
+            await ws.close()
+            return
+        frame_id = 0
+        timer = StageTimer()
+        providers = load_providers_config()
+        det_cfg = providers.get("detection", {})
+        det_model = det_cfg.get("model", "ultralytics/yolov8")
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                break
+            h, w = frame.shape[:2]
+            # Encode frame to base64 for provider calls
+            ok2, buf = cv2.imencode(".jpg", frame)
+            if not ok2:
+                break
+            b64 = base64.b64encode(buf.tobytes()).decode("utf-8")
+            # Detection
+            with timed(timer, "model"):
+                det = ReplicateDetector(det_model)
+                dets = det.infer(b64)
+            boxes = [{"x1": d.x1, "y1": d.y1, "x2": d.x2, "y2": d.y2, "score": d.score, "cls": d.cls} for d in dets]
+            # Tracking
+            tracks = SimpleTracker().update(boxes)
+            # Build event
+            total_ms = sum(timer.timings_ms.values()) or 1e-6
+            fps_val = 1000.0 / total_ms
             event = {
                 "run_id": run_id,
-                "frame_id": i,
+                "frame_id": frame_id,
                 "ts": datetime.now(timezone.utc).isoformat(),
-                "timings": {"pre": 2.0, "model": 15.0, "post": 3.0},
-                "fps": 20.0,
-                "boxes": [],
-                "tracks": [],
+                "timings": {"model": round(timer.timings_ms.get("model", 0.0), 2)},
+                "fps": fps_val,
+                "boxes": boxes,
+                "tracks": tracks,
                 "masks": [],
                 "ocr": [],
-                "provider_provenance": {"detector": "replicate:yolov8", "ocr": "gcv"},
-                "note": f"stub stream for {video_path} ({profile})",
+                "provider_provenance": {"detector": f"replicate:{det_model}", "ocr": ""},
                 "errors": [],
+                "shape": {"w": w, "h": h},
             }
             registry.append_event(run_id, json.dumps(event))
             metrics.fps.set(event["fps"])  # basic metric update
             await ws.send_json(event)
+            frame_id += 1
         await ws.close()
     except WebSocketDisconnect:
-        # Client disconnected early
         return
+    finally:
+        if cap is not None:
+            cap.release()
 
 
 @app.get("/events_snapshot")
