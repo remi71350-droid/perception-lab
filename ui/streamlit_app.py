@@ -523,6 +523,7 @@ def main() -> None:
             if st.session_state.get("show_ab"): curr_step = 3
             if report_exists or ab_comp: curr_step = 4
             left, right = st.columns([7,5])
+            rendered_side_panels = False
             # Scenario source path availability for both columns
             mp4 = (sel or {}).get("mp4")
             mp4_ok = bool(mp4 and Path(mp4).exists())
@@ -531,10 +532,8 @@ def main() -> None:
             name_text = (sel or {}).get("desc", "")
             hdr_left, hdr_right = st.columns([8,4])
             with hdr_left:
-                st.markdown("#### Scenario workspace")
-                if name_text:
-                    st.caption(name_text)
-                st.caption("Pick mode, run a short segment, compare, and export artifacts.")
+                # Scenario workspace heading moved below preview in right column per layout request
+                st.markdown("")
             with hdr_right:
                 _ok = _ping_api(st.session_state.api_base)
                 chip = "🟢 Connected" if _ok else "🔴 Offline"
@@ -596,7 +595,7 @@ def main() -> None:
                 # Buttons under preview
                 btnc1, btnc2 = st.columns([1,1])
                 with btnc1:
-                    if mp4_ok and st.button("Open scenario video", use_container_width=True, help="Open the original input video"):
+                    if mp4_ok and st.button("Open Video", use_container_width=True, help="Open the original input video"):
                         mp4 = (sel or {}).get("mp4")
                         if mp4 and Path(mp4).exists():
                             st.success(f"Source: {mp4}")
@@ -620,6 +619,87 @@ def main() -> None:
                         unsafe_allow_html=True,
                     )
                 st.markdown("</div>", unsafe_allow_html=True)
+                # Move Artifacts and Bookmarks under the preview on the right
+                from pathlib import Path as _P
+                st.markdown("### Artifacts")
+                last_frame = _P("runs/latest/last_frame.png")
+                ab_comp = _P("runs/latest/ab_composite.png")
+                out_mp4 = _P("runs/latest/out.mp4")
+                report_pdf = _P("runs/latest/report.pdf")
+                rac1, rac2 = st.columns([1,1])
+                if has_artifacts:
+                    with rac1:
+                        if last_frame.exists():
+                            st.image(str(last_frame), caption="last_frame.png", use_column_width=True)
+                            if st.button("Copy path (image)"):
+                                st.info(str(last_frame))
+                        if ab_comp.exists():
+                            st.image(str(ab_comp), caption="ab_composite.png", use_column_width=True)
+                            if st.button("Copy path (composite)"):
+                                st.info(str(ab_comp))
+                    with rac2:
+                        if out_mp4.exists():
+                            st.video(str(out_mp4))
+                            if st.button("Copy path (video)"):
+                                st.info(str(out_mp4))
+                        if report_pdf.exists():
+                            st.link_button("Open report (PDF)", report_pdf.as_posix(), use_container_width=True)
+                            if st.button("Copy path (report)"):
+                                st.info(str(report_pdf))
+                    st.caption("Artifacts reflect the current mode and overlay settings at capture time.")
+                else:
+                    if st.session_state.get("is_running"):
+                        st.markdown("<div class='skeleton'></div>", unsafe_allow_html=True)
+                    else:
+                        st.caption("Artifacts appear here after a run or compare.")
+
+                # Bookmarks in right column
+                if st.button("Bookmark frame", key="__bookmark_btn__"):
+                    try:
+                        import json as _json
+                        rows = st.session_state.get("telemetry_rows", [])
+                        fid = rows[-1].get("frame_id") if rows else None
+                        bk = {"ts": time.time(), "frame_id": fid, "scenario": (sel or {}).get("mp4")}
+                        p = _P("runs/latest/bookmarks.json")
+                        arr = []
+                        if p.exists():
+                            arr = _json.loads(p.read_text(encoding="utf-8"))
+                        arr.append(bk)
+                        p.write_text(_json.dumps(arr, indent=2), encoding="utf-8")
+                        st.toast("Bookmarked.", icon="🔖")
+                    except Exception as e:
+                        st.warning(f"Bookmark failed: {e}")
+                try:
+                    import json as _json
+                    bp = _P("runs/latest/bookmarks.json")
+                    if bp.exists():
+                        st.markdown("#### Bookmarks")
+                        arr = _json.loads(bp.read_text(encoding="utf-8"))
+                        for bmk in arr[-5:][::-1]:
+                            cols = st.columns([3,1,1])
+                            with cols[0]:
+                                st.caption(f"Frame {bmk.get('frame_id')} — {Path((bmk.get('scenario') or '')).name}")
+                            with cols[1]:
+                                if st.button("Open frame", key=f"bk_open_{bmk.get('ts')}"):
+                                    try:
+                                        lf = _P("runs/latest/last_frame.png")
+                                        if lf.exists():
+                                            st.image(str(lf), caption="Last frame")
+                                        else:
+                                            st.info("No last_frame.png yet.")
+                                    except Exception as _e:
+                                        st.warning(f"Open failed: {_e}")
+                            with cols[2]:
+                                if st.button("Copy", key=f"bk_copy_{bmk.get('ts')}"):
+                                    st.info(str(bp))
+                except Exception:
+                    pass
+                rendered_side_panels = True
+                # Scenario workspace info under right column content
+                st.markdown("#### Scenario workspace")
+                if name_text:
+                    st.caption(name_text)
+                st.caption("Pick mode, run a short segment, compare, and export artifacts.")
 
             with left:
                 # Stepbar: labels outside, bigger text inside buttons
@@ -649,15 +729,19 @@ def main() -> None:
                 )
                 st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
-                # Mode selector + microcopy
-                profile = st.radio(
-                    "",
-                    options=["realtime", "accuracy"],
-                    horizontal=True,
-                    index=0,
-                    label_visibility="collapsed",
-                    key="profile_mode_focus",
-                )
+                # Mode selector + microcopy (hint to the right of the radio)
+                col_r, col_hint = st.columns([1, 2])
+                with col_r:
+                    profile = st.radio(
+                        "",
+                        options=["realtime", "accuracy"],
+                        horizontal=True,
+                        index=0,
+                        label_visibility="collapsed",
+                        key="profile_mode_focus",
+                    )
+                with col_hint:
+                    st.markdown("<span style='font-size:12px; opacity:.85'>(Realtime prioritizes throughput. Accuracy prioritizes detail.)</span>", unsafe_allow_html=True)
                 # Make radio labels smaller and all-caps via CSS
                 st.markdown(
                     """
@@ -668,7 +752,6 @@ def main() -> None:
                     """,
                     unsafe_allow_html=True,
                 )
-                st.caption("Realtime prioritizes throughput. Accuracy prioritizes detail.")
                 # Profile badges (compact, with tooltips)
                 _inp = 640 if profile == "realtime" else 1024
                 _conf = float(st.session_state.get("conf_thresh_focus", 0.35))
@@ -994,14 +1077,15 @@ def main() -> None:
                         else:
                             st.caption("No telemetry yet.")
 
-                # Artifacts panel
-                st.markdown("### Artifacts")
+                # Artifacts panel (moved to right column)
+                if not rendered_side_panels:
+                    st.markdown("### Artifacts")
                 last_frame = _P("runs/latest/last_frame.png")
                 ab_comp = _P("runs/latest/ab_composite.png")
                 out_mp4 = _P("runs/latest/out.mp4")
                 report_pdf = _P("runs/latest/report.pdf")
                 ac1, ac2 = st.columns([1,1])
-                if has_artifacts:
+                if (has_artifacts) and (not rendered_side_panels):
                     with ac1:
                         if last_frame.exists():
                             st.image(str(last_frame), caption="last_frame.png", use_column_width=True)
@@ -1027,7 +1111,8 @@ def main() -> None:
                     if st.session_state.get("is_running"):
                         st.markdown("<div class='skeleton'></div>", unsafe_allow_html=True)
                     else:
-                        st.caption("Artifacts appear here after a run or compare.")
+                        if not rendered_side_panels:
+                            st.caption("Artifacts appear here after a run or compare.")
 
                 # Inline missing asset warning
                 if not mp4_ok:
@@ -1048,52 +1133,7 @@ def main() -> None:
                     """,
                     unsafe_allow_html=True,
                 )
-                # Hidden Bookmark button for keyboard 'b' to append a bookmark; list bookmarks
-                if st.button("Bookmark frame", key="__bookmark_btn__"):
-                    try:
-                        import json as _json
-                        from pathlib import Path as _P
-                        rows = st.session_state.get("telemetry_rows", [])
-                        fid = rows[-1].get("frame_id") if rows else None
-                        bk = {"ts": time.time(), "frame_id": fid, "scenario": (sel or {}).get("mp4")}
-                        p = _P("runs/latest/bookmarks.json")
-                        arr = []
-                        if p.exists():
-                            arr = _json.loads(p.read_text(encoding="utf-8"))
-                        arr.append(bk)
-                        p.write_text(_json.dumps(arr, indent=2), encoding="utf-8")
-                        st.toast("Bookmarked.", icon="🔖")
-                    except Exception as e:
-                        st.warning(f"Bookmark failed: {e}")
-                # Render bookmark list
-                try:
-                    from pathlib import Path as _P
-                    import json as _json
-                    bp = _P("runs/latest/bookmarks.json")
-                    if bp.exists():
-                        st.markdown("#### Bookmarks")
-                        arr = _json.loads(bp.read_text(encoding="utf-8"))
-                        for bmk in arr[-5:][::-1]:
-                            cols = st.columns([3,1,1])
-                            with cols[0]:
-                                st.caption(f"Frame {bmk.get('frame_id')} — {Path((bmk.get('scenario') or '')).name}")
-                            with cols[1]:
-                                if st.button("Open frame", key=f"bk_open_{bmk.get('ts')}"):
-                                    try:
-                                        from pathlib import Path as _P
-                                        # Prefer last_frame if present
-                                        lf = _P("runs/latest/last_frame.png")
-                                        if lf.exists():
-                                            st.image(str(lf), caption="Last frame")
-                                        else:
-                                            st.info("No last_frame.png yet.")
-                                    except Exception as _e:
-                                        st.warning(f"Open failed: {_e}")
-                            with cols[2]:
-                                if st.button("Copy", key=f"bk_copy_{bmk.get('ts')}"):
-                                    st.info(str(bp))
-                except Exception:
-                    pass
+                # Hidden Bookmark button and list moved to right column
 
                 # Note: Single-image tools have been removed from the focus view per requirements.
 
