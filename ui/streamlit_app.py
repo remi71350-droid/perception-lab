@@ -593,7 +593,7 @@ def main() -> None:
                 # Buttons under preview
                 btnc1, btnc2 = st.columns([1,1])
                 with btnc1:
-                    if st.button("Open source MP4", use_container_width=True):
+                    if mp4_ok and st.button("Open scenario video", use_container_width=True, help="Open the original input video"):
                         mp4 = (sel or {}).get("mp4")
                         if mp4 and Path(mp4).exists():
                             st.success(f"Source: {mp4}")
@@ -653,7 +653,7 @@ def main() -> None:
                 st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
                 # Primary actions row
-                a1, a2, a3, a4 = st.columns([1.2,1.4,1.1,1.1])
+                a1, a2, a3, a4 = st.columns([1.2,1.6,1.1,1.1])
                 running = st.session_state.get("_run10s_running", False)
                 mp4 = (sel or {}).get("mp4")
                 mp4_ok = bool(mp4 and Path(mp4).exists())
@@ -687,14 +687,23 @@ def main() -> None:
                             st.warning("Missing MP4; actions disabled.")
                 with a2:
                     disabled_compare = running or (not _ok) or (not mp4_ok)
-                    if st.button("Compare this frame", help="Grab current frame in both modes and show A/B", use_container_width=True, disabled=disabled_compare):
+                    if st.button("Compare profiles (A/B)", help="Capture the same frame in both profiles and open a slider", use_container_width=True, disabled=disabled_compare):
                         try:
+                            st.toast("Preparing A/B images…", icon="🌓")
                             client.ab_compare(mp4)
                             st.session_state["show_ab"] = True
                             st.session_state["has_run"] = True
                             st.toast("Compare images ready.", icon="🌓")
                         except Exception as e:
                             st.warning(f"Compare failed: {e}")
+                    # Capture frame marker and label
+                    cap1, cap2 = st.columns([1,2])
+                    if cap1.button("Capture frame", help="Mark current frame for compare", use_container_width=True):
+                        st.session_state["compare_frame"] = "midpoint"
+                        st.toast("Frame marked.", icon="📌")
+                    with cap2:
+                        if st.session_state.get("compare_frame"):
+                            st.caption("Frame: midpoint")
                 with a3:
                     if running and st.button("Stop run", use_container_width=True, help="Cancel the active run"):
                         try:
@@ -718,7 +727,7 @@ def main() -> None:
                 # P1: quick metrics & report
                 b1, b2 = st.columns([1.2,1.6])
                 with b1:
-                    if st.button("Score last run", use_container_width=True, disabled=not st.session_state.get("has_run"), help="Compute simple metrics from events.jsonl"):
+                    if st.button("Compute metrics", use_container_width=True, disabled=not st.session_state.get("has_run"), help="Compute simple metrics from events.jsonl"):
                         try:
                             import json as _json
                             from pathlib import Path as _P
@@ -746,7 +755,14 @@ def main() -> None:
                             _P("runs/latest").mkdir(parents=True, exist_ok=True)
                             with _P("runs/latest/metrics.json").open("w", encoding="utf-8") as fh:
                                 _json.dump(metrics, fh, indent=2)
-                            st.success("Metrics saved to runs/latest/metrics.json")
+                            st.toast("Metrics computed.", icon="📊")
+                            # Inline metrics card
+                            st.markdown("<div class='card'>", unsafe_allow_html=True)
+                            st.markdown(f"**Frames**: {metrics['frames']}  ")
+                            st.markdown(f"**FPS (avg)**: {metrics['avg_fps']}  ")
+                            st.markdown(f"**Latency avg (ms)**: pre {metrics['avg_pre_ms']} | model {metrics['avg_model_ms']} | post {metrics['avg_post_ms']}")
+                            st.markdown("</div>", unsafe_allow_html=True)
+                            st.caption("View full metrics → Metrics tab | Export: runs/latest/metrics.json")
                         except Exception as e:
                             st.warning(f"Scoring failed: {e}")
                 with b2:
@@ -763,7 +779,7 @@ def main() -> None:
                                 page.paste(im, (0,160))
                                 out_pdf.parent.mkdir(parents=True, exist_ok=True)
                                 page.save(out_pdf, "PDF", resolution=144)
-                                st.success(f"Report saved: {out_pdf}")
+                                st.toast("Report ready.", icon="📄")
                             else:
                                 st.info("No last_frame.png to include in report.")
                         except Exception as e:
