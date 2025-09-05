@@ -523,6 +523,9 @@ def main() -> None:
             if st.session_state.get("show_ab"): curr_step = 3
             if report_exists or ab_comp: curr_step = 4
             left, right = st.columns([7,5])
+            # Scenario source path availability for both columns
+            mp4 = (sel or {}).get("mp4")
+            mp4_ok = bool(mp4 and Path(mp4).exists())
 
             # Header (full-width above columns)
             name_text = (sel or {}).get("desc", "")
