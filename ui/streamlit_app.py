@@ -1264,8 +1264,7 @@ def main() -> None:
             except Exception as e:
                 st.warning(f"Fusion projection failed: {e}")
 
-    with tab_use_cases:
-        st.subheader("Use Cases")
+    # Use Cases tab removed per request
         # Make the Use Cases tab labels smaller to avoid overlap (scoped via JS-assigned class)
         st.markdown(
             """
