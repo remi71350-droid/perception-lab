@@ -314,7 +314,7 @@ def main() -> None:
     _badge = "🟢 Connected" if _ok else "🔴 Offline"
     st.markdown(
         f"""
-        <div style="display:flex;justify-content:flex-end;align-items:center;font-size:12px;opacity:.9;">
+        <div style=\"position:fixed; top:8px; right:12px; z-index:1000; font-size:12px; opacity:.95; background:rgba(6,14,38,0.6); padding:4px 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.15);\">
           <span>{_badge}</span>
         </div>
         """,
@@ -535,21 +535,10 @@ def main() -> None:
                 # Scenario workspace heading moved below preview in right column per layout request
                 st.markdown("")
             with hdr_right:
-                _ok = _ping_api(st.session_state.api_base)
-                chip = "🟢 Connected" if _ok else "🔴 Offline"
-                tooltip = "Connected (offline mode)" if st.session_state.get("offline") else "Connected"
-                st.markdown(f"<div style='text-align:right'><span title='{tooltip}'>{chip}</span></div>", unsafe_allow_html=True)
-                if st.button("← Back to gallery", type="secondary", use_container_width=True):
-                    st.session_state.update(
-                        view_mode="gallery",
-                        selected_scenario=None,
-                        show_ab=False,
-                        has_run=False,
-                        has_artifacts=False,
-                        is_running=False,
-                        carousel_anim="",
-                    )
-                    st.rerun()
+                pass
+            # Left column content begins
+            with left:
+                st.markdown("")
 
             with right:
                 try:
@@ -565,6 +554,21 @@ def main() -> None:
                         f"<img src='data:image/gif;base64,{gif_b64}' alt='{alt}' style='width:100%;height:auto;border-radius:8px' />",
                         unsafe_allow_html=True,
                     )
+                # Back arrow button (bottom-right under preview)
+                _sp1, _sp2 = st.columns([10,1])
+                with _sp2:
+                    if st.button("⟵", key="back_to_gallery_right", help="Back to gallery"):
+                        st.session_state.update(
+                            view_mode="gallery",
+                            selected_scenario=None,
+                            show_ab=False,
+                            has_run=False,
+                            has_artifacts=False,
+                            is_running=False,
+                            carousel_anim="",
+                        )
+                        st.rerun()
+                
                 # Scenario metadata (lighting/env/features)
                 _sname = (sel or {}).get("mp4", "")
                 _stem = Path(_sname).stem if _sname else ""
@@ -622,7 +626,10 @@ def main() -> None:
                 # Move Artifacts and Bookmarks under the preview on the right
                 from pathlib import Path as _P
                 st.markdown("### Artifacts")
+                # Prefer data/offline last_frame if present in offline mode
                 last_frame = _P("runs/latest/last_frame.png")
+                if st.session_state.get("offline") and _P("data/offline/last_frame.png").exists():
+                    last_frame = _P("data/offline/last_frame.png")
                 ab_comp = _P("runs/latest/ab_composite.png")
                 out_mp4 = _P("runs/latest/out.mp4")
                 report_pdf = _P("runs/latest/report.pdf")
@@ -830,10 +837,9 @@ def main() -> None:
                         from pathlib import Path as _P
                         st.toast("Preparing A/B images…", icon="🌓")
                         did_ab = False
-                        # If offline, prefer local fallback directly
+                        # If offline, prefer local fallback directly (data/offline first)
                         if st.session_state.get("offline"):
-                            stem = (_P(mp4).stem if mp4 else "")
-                            off = _P("offline")/stem
+                            off = _P("data/offline")
                             dst = _P("runs/latest"); dst.mkdir(parents=True, exist_ok=True)
                             left = off/"realtime_frame.png"; right = off/"accuracy_frame.png"
                             if left.exists() and right.exists():
@@ -845,9 +851,8 @@ def main() -> None:
                                 client.ab_compare(mp4)
                                 did_ab = True
                             except Exception:
-                                # Fallback: try offline assets by stem
-                                stem = (_P(mp4).stem if mp4 else "")
-                                off = _P("offline")/stem
+                                # Fallback: try data/offline assets
+                                off = _P("data/offline")
                                 dst = _P("runs/latest"); dst.mkdir(parents=True, exist_ok=True)
                                 left = off/"realtime_frame.png"; right = off/"accuracy_frame.png"
                                 if left.exists() and right.exists():
@@ -1012,7 +1017,8 @@ def main() -> None:
                 if st.session_state.get("show_ab") and rt_img.exists() and ac_img.exists():
                     try:
                         from streamlit_image_comparison import image_comparison
-                        image_comparison(img1=str(rt_img), img2=str(ac_img), label1="Realtime", label2="Accuracy", width=700)
+                        # Constrain slider width so it fits within the left column without overlapping
+                        image_comparison(img1=str(rt_img), img2=str(ac_img), label1="Realtime", label2="Accuracy", width=520)
                         if st.button("Save composite"):
                             try:
                                 from PIL import Image as PILImage
