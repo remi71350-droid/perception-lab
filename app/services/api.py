@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+import os
 from fastapi.responses import JSONResponse, PlainTextResponse
 import json
 from datetime import datetime, timezone
@@ -25,15 +26,17 @@ from app.providers.ocr.replicate_paddleocr import ReplicatePaddleOcr
 app = FastAPI(title="Perception Ops Lab API", version="0.1.0")
 
 # Enable CORS for local Streamlit UI
+_cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:8501,http://127.0.0.1:8501").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8501", "http://127.0.0.1:8501"],
+    allow_origins=[o.strip() for o in _cors_origins if o.strip()],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 registry = RunRegistry()
 metrics = get_metrics_registry()
+_stop_requested: bool = False
 
 
 @app.get("/health")
@@ -181,6 +184,17 @@ def run_video(req: RunVideoRequest) -> JSONResponse:
     return JSONResponse({"status": "accepted", "run_id": run_id, "note": "WS stream TBD"})
 
 
+@app.post("/run_control")
+def run_control(payload: dict) -> dict:
+    """Simple control endpoint; currently supports action=="stop"."""
+    global _stop_requested
+    action = str(payload.get("action", "")).lower()
+    if action == "stop":
+        _stop_requested = True
+        return {"ok": True, "action": action}
+    return {"ok": False, "error": "unsupported action"}
+
+
 @app.post("/evaluate")
 def evaluate(req: EvaluateRequest) -> dict:
     # Call evaluator agent placeholder and persist
@@ -227,34 +241,130 @@ def last_event() -> JSONResponse:
 @app.websocket("/ws/run_video")
 async def ws_run_video(ws: WebSocket) -> None:
     await ws.accept()
+    cap = None
     try:
         params = dict(ws.query_params)
         video_path = params.get("video_path", "data/samples/day.mp4")
         profile = params.get("profile", "realtime")
         run_id = registry.ensure_run()
-        # Send a few stub frames with timings/ids
-        for i in range(3):
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            await ws.send_json({"error": f"cannot open video: {video_path}"})
+            await ws.close()
+            return
+        frame_id = 0
+        timer = StageTimer()
+        providers = load_providers_config()
+        det_cfg = providers.get("detection", {})
+        det_model = det_cfg.get("model", "ultralytics/yolov8")
+        global _stop_requested
+        _stop_requested = False
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                break
+            if _stop_requested:
+                break
+            h, w = frame.shape[:2]
+            # Encode frame to base64 for provider calls
+            ok2, buf = cv2.imencode(".jpg", frame)
+            if not ok2:
+                break
+            b64 = base64.b64encode(buf.tobytes()).decode("utf-8")
+            # Detection
+            with timed(timer, "model"):
+                det = ReplicateDetector(det_model)
+                dets = det.infer(b64)
+            boxes = [{"x1": d.x1, "y1": d.y1, "x2": d.x2, "y2": d.y2, "score": d.score, "cls": d.cls} for d in dets]
+            # Tracking
+            tracks = SimpleTracker().update(boxes)
+            # Build event
+            total_ms = sum(timer.timings_ms.values()) or 1e-6
+            fps_val = 1000.0 / total_ms
             event = {
                 "run_id": run_id,
-                "frame_id": i,
+                "frame_id": frame_id,
                 "ts": datetime.now(timezone.utc).isoformat(),
-                "timings": {"pre": 2.0, "model": 15.0, "post": 3.0},
-                "fps": 20.0,
-                "boxes": [],
-                "tracks": [],
+                "timings": {"model": round(timer.timings_ms.get("model", 0.0), 2)},
+                "fps": fps_val,
+                "boxes": boxes,
+                "tracks": tracks,
                 "masks": [],
                 "ocr": [],
-                "provider_provenance": {"detector": "replicate:yolov8", "ocr": "gcv"},
-                "note": f"stub stream for {video_path} ({profile})",
+                "provider_provenance": {"detector": f"replicate:{det_model}", "ocr": ""},
                 "errors": [],
+                "shape": {"w": w, "h": h},
             }
             registry.append_event(run_id, json.dumps(event))
             metrics.fps.set(event["fps"])  # basic metric update
             await ws.send_json(event)
+            frame_id += 1
         await ws.close()
     except WebSocketDisconnect:
-        # Client disconnected early
         return
+    finally:
+        if cap is not None:
+            cap.release()
+
+
+@app.post("/ab_compare")
+def ab_compare(payload: dict) -> dict:
+    """Render a single representative frame in both profiles and save side-by-side assets.
+
+    Writes runs/latest/realtime_frame.png and runs/latest/accuracy_frame.png.
+    """
+    video_path = payload.get("video_path", "data/samples/day.mp4")
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return {"ok": False, "error": f"cannot open video: {video_path}"}
+    # Seek to midpoint frame if possible
+    try:
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
+        if total > 0:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, total // 2)
+    except Exception:
+        pass
+    ok, frame = cap.read()
+    cap.release()
+    if not ok:
+        return {"ok": False, "error": "failed to read frame"}
+    ok2, buf = cv2.imencode(".jpg", frame)
+    if not ok2:
+        return {"ok": False, "error": "encode failure"}
+    b64 = base64.b64encode(buf.tobytes()).decode("utf-8")
+    providers = load_providers_config()
+    det_cfg = providers.get("detection", {})
+    det_model = det_cfg.get("model", "ultralytics/yolov8")
+    # Helper to annotate
+    def _annotate(img_b64: str) -> tuple[list[dict], np.ndarray]:
+        det = ReplicateDetector(det_model)
+        dets = det.infer(img_b64)
+        boxes = [{"x1": d.x1, "y1": d.y1, "x2": d.x2, "y2": d.y2} for d in dets]
+        arr = cv2.imdecode(np.frombuffer(base64.b64decode(img_b64), dtype=np.uint8), cv2.IMREAD_COLOR)
+        vis = draw_boxes(arr, [(b["x1"], b["y1"], b["x2"], b["y2"]) for b in boxes]) if boxes else arr
+        return boxes, vis
+    # Realtime
+    _, vis_rt = _annotate(b64)
+    # Accuracy (same flow for now; in a real setup you would swap models/providers)
+    _, vis_ac = _annotate(b64)
+    out = Path("runs/latest")
+    out.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(out / "realtime_frame.png"), vis_rt)
+    cv2.imwrite(str(out / "accuracy_frame.png"), vis_ac)
+    return {"ok": True}
+
+
+@app.post("/clear")
+def clear() -> dict:
+    """Remove artifacts in runs/latest to reset UI state."""
+    root = Path("runs/latest")
+    if root.exists():
+        for p in root.glob("*"):
+            try:
+                p.unlink()
+            except Exception:
+                pass
+    return {"ok": True}
 
 
 @app.get("/events_snapshot")
