@@ -1,6 +1,6 @@
-name: ci
+name: c.yml
 on: [push, pull_request]
-jobs:
+jobs: "true"
   build:
     runs-on: ubuntu-latest
     steps:
